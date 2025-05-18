@@ -68,6 +68,23 @@ ScaffoldingReadMe.txt
 # StyleCop
 StyleCopReport.xml
 
+# Secret files
+*.secret.json
+appsettings.Production.json
+local.settings.json
+azure-signalr
+
+# Environment variables
+.env
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# DALL-E generated images (if stored locally)
+generated-images/
+
 # Files built by Visual Studio
 *_i.c
 *_p.c
