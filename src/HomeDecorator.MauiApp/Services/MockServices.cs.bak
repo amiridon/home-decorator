@@ -1,0 +1,115 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using HomeDecorator.Core.Services;
+
+namespace HomeDecorator.MauiApp.Services
+{
+    /// <summary>
+    /// Mock implementation of IBillingService for development
+    /// </summary>
+    public class MockBillingService : IBillingService
+    {
+        public Task<bool> HasSufficientCredits(string userId, int requiredCredits = 1)
+        {
+            // Always return true in mock mode
+            return Task.FromResult(true);
+        }
+
+        public Task<int> GetRemainingCredits(string userId)
+        {
+            // Return a fixed number for testing
+            return Task.FromResult(10);
+        }
+
+        public Task<string> GenerateCheckoutLink(string userId, string packageId)
+        {
+            // Return a fake checkout URL
+            return Task.FromResult("https://fake-stripe-checkout.example.com/checkout?session=mock-session-id");
+        }
+    }
+
+    /// <summary>
+    /// Mock implementation of IGenerationService for development
+    /// </summary>
+    public class MockGenerationService : IGenerationService
+    {
+        public Task<string> GenerateImageAsync(string originalImageUrl, string prompt)
+        {
+            // Return a placeholder image URL
+            return Task.FromResult("https://via.placeholder.com/400x300?text=Generated+Image+(Mock)");
+        }
+
+        public Task<List<string>> GetRecentGenerationsAsync(string userId, int count = 5)
+        {
+            // Return some placeholder images
+            var images = new List<string>
+            {
+                "https://via.placeholder.com/400x300?text=Mock+Image+1",
+                "https://via.placeholder.com/400x300?text=Mock+Image+2",
+                "https://via.placeholder.com/400x300?text=Mock+Image+3"
+            };
+            
+            return Task.FromResult(images);
+        }
+    }
+
+    /// <summary>
+    /// Mock implementation of IProductMatcherService for development
+    /// </summary>
+    public class MockProductMatcherService : IProductMatcherService
+    {
+        public Task<List<Product>> DetectAndMatchProductsAsync(string imageUrl)
+        {
+            // Return fake products
+            var products = new List<Product>
+            {
+                new Product
+                {
+                    Id = "mock-product-1",
+                    Name = "Mid-Century Modern Sofa",
+                    Price = 899.99M,
+                    Currency = "USD",
+                    Vendor = "MockFurnitureCo",
+                    ThumbnailUrl = "https://via.placeholder.com/100x100?text=Sofa",
+                    DetailUrl = "https://example.com/products/sofa"
+                },
+                new Product
+                {
+                    Id = "mock-product-2",
+                    Name = "Pendant Light Fixture",
+                    Price = 249.99M,
+                    Currency = "USD",
+                    Vendor = "MockLightingCo",
+                    ThumbnailUrl = "https://via.placeholder.com/100x100?text=Light",
+                    DetailUrl = "https://example.com/products/light"
+                },
+                new Product
+                {
+                    Id = "mock-product-3",
+                    Name = "Area Rug 5'x7'",
+                    Price = 199.99M,
+                    Currency = "USD",
+                    Vendor = "MockHomeCo",
+                    ThumbnailUrl = "https://via.placeholder.com/100x100?text=Rug",
+                    DetailUrl = "https://example.com/products/rug"
+                }
+            };
+            
+            return Task.FromResult(products);
+        }
+    }
+
+    /// <summary>
+    /// Mock implementation of IRecommendationService for development
+    /// </summary>
+    public class MockRecommendationService : IRecommendationService
+    {
+        public Task<List<Product>> GetRecommendationsAsync(string imageUrl, int count = 5)
+        {
+            // Delegate to the mock product matcher for simplicity
+            var productMatcher = new MockProductMatcherService();
+            return productMatcher.DetectAndMatchProductsAsync(imageUrl);
+        }
+    }
+}

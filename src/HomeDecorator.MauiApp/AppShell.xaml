@@ -4,12 +4,49 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:HomeDecorator.MauiApp"
+    xmlns:views="clr-namespace:HomeDecorator.MauiApp.Views"
     Shell.FlyoutBehavior="Flyout"
-    Title="HomeDecorator.MauiApp">
+    FlyoutBackgroundColor="#f2f2f7"
+    Title="Home Decorator">
+
+    <Shell.FlyoutHeader>
+        <Grid HeightRequest="120"
+                BackgroundColor="#007AFF">
+            <Image Source="dotnet_bot.png"
+                    HeightRequest="80"
+                    Margin="20"/>
+            <Label Text="Home Decorator"
+                    TextColor="White"
+                    FontSize="24"
+                    FontAttributes="Bold"
+                   HorizontalOptions="Center"
+                    VerticalOptions="End"
+                    Margin="0,0,0,15"/>
+        </Grid>
+    </Shell.FlyoutHeader>
 
     <ShellContent
         Title="Home"
+        Icon="home.png"
+        ContentTemplate="{DataTemplate views:HomePage}"
+        Route="HomePage"/>
+
+    <ShellContent
+        Title="Design History"
+        Icon="history.png"
         ContentTemplate="{DataTemplate local:MainPage}"
-        Route="MainPage" />
+        Route="HistoryPage"/>
+
+    <ShellContent
+        Title="Billing"
+        Icon="credit_card.png"
+        ContentTemplate="{DataTemplate local:MainPage}"
+        Route="BillingPage"/>
+
+    <ShellContent
+        Title="Settings"
+        Icon="settings.png"
+        ContentTemplate="{DataTemplate views:SettingsPage}"
+        Route="SettingsPage"/>
 
 </Shell>

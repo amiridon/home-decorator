@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="HomeDecorator.MauiApp.Views.NewDesignPage"
+             Title="Create New Design">
+    <ScrollView>
+        <VerticalStackLayout Padding="20"
+                Spacing="20">
+            <Frame BorderColor="LightGray"
+                    HasShadow="True"
+                    CornerRadius="10"
+                    Padding="20">
+                <VerticalStackLayout Spacing="15">
+                    <Label Text="Take a Photo"
+                            FontSize="20"
+                            FontAttributes="Bold"/>
+
+                    <Image x:Name="SelectedImage"
+                           Source="dotnet_bot.png"
+                           HeightRequest="200"
+                           HorizontalOptions="Center"/>
+
+                    <Button Text="Take Photo"
+                            BackgroundColor="#007AFF"
+                            TextColor="White"
+                            Clicked="OnTakePhotoClicked"/>
+
+                    <Button Text="Choose From Gallery"
+                            BackgroundColor="#5AC8FA"
+                            TextColor="White"
+                            Clicked="OnChoosePhotoClicked"/>
+                </VerticalStackLayout>
+            </Frame>
+
+            <Frame BorderColor="LightGray"
+                    HasShadow="True"
+                    CornerRadius="10"
+                    Padding="20">
+                <VerticalStackLayout Spacing="15">
+                    <Label Text="Design Prompt"
+                            FontSize="20"
+                            FontAttributes="Bold"/>
+
+                    <Label Text="Tell us how you'd like to transform this space"/>
+
+                    <Editor x:Name="PromptEditor"
+                            Placeholder="Examples: Modern farmhouse living room with natural wood accents; Minimalist kitchen with clean lines and marble countertops"
+                            HeightRequest="120"
+                            AutoSize="TextChanges"/>
+
+                    <Button Text="Generate Design"
+                            BackgroundColor="#34C759"
+                            TextColor="White"
+                            Clicked="OnGenerateDesignClicked"/>
+                </VerticalStackLayout>
+            </Frame>
+
+            <Frame x:Name="FakeModeIndicator"
+                   IsVisible="{Binding IsFakeDataMode}"
+                   BackgroundColor="#FFCC00"
+                   Padding="10"
+                   CornerRadius="10">
+                <Label Text="⚠️ FAKE DATA MODE ENABLED - Using mock services"
+                       HorizontalOptions="Center"
+                       FontAttributes="Bold"
+                       TextColor="Black"/>
+            </Frame>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

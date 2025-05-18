@@ -1,0 +1,28 @@
+﻿@inherits LayoutComponentBase
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <span class="user-info">
+                <i class="bi bi-person-circle"></i>
+                <span>Demo User</span>
+            </span>
+            <a href="settings" class="btn btn-sm btn-outline-primary ms-2">
+                <i class="bi bi-gear"></i> Settings
+            </a>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+
+        <footer class="footer mt-auto py-3">
+            <div class="container text-center">
+                <span class="text-muted">Home Decorator - Web Preview Mode - Week 1 Implementation</span>
+            </div>
+        </footer>
+    </main>
+</div>

@@ -1,0 +1,121 @@
+@namespace HomeDecorator.Shared.Components
+@using HomeDecorator.Shared.Models
+
+<div class="design-form">
+    <h3 class="mb-4">Create New Design</h3>
+
+    <div class="form-group mb-3">
+        <label for="imageUrl">Image URL or Upload</label>
+        <div class="input-group">
+            <input type="text" class="form-control" id="imageUrl" placeholder="Enter image URL" 
+                   @bind="ImageUrl" />
+        </div>
+        <div class="mt-2">
+            <button class="btn btn-outline-secondary btn-sm" @onclick="OnUploadClick">
+                <i class="bi bi-upload"></i> Upload Image
+            </button>
+        </div>
+    </div>
+
+    <div class="form-group mb-3">
+        <label for="prompt">Design Prompt</label>
+        <textarea class="form-control" id="prompt" rows="3" placeholder="Describe how you'd like to transform this space..." 
+                 @bind="Prompt"></textarea>
+    </div>
+
+    @if (!string.IsNullOrEmpty(ImagePreviewUrl))
+    {
+        <div class="image-preview mb-4">
+            <h5>Image Preview</h5>
+            <img src="@ImagePreviewUrl" class="img-fluid" alt="Preview" />
+        </div>
+    }
+
+    <div class="form-group mb-4">
+        <button class="btn btn-primary" @onclick="HandleSubmit" disabled="@(!CanSubmit)">
+            Generate Design
+        </button>
+    </div>
+
+    @if (IsFakeModeEnabled)
+    {
+        <div class="fake-mode-indicator">
+            <div class="alert alert-warning">
+                <strong>⚠️ Fake Data Mode Active</strong>
+                <p>Using mock services instead of real APIs</p>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .design-form {
+        max-width: 700px;
+        margin: 0 auto;
+    }
+
+    .image-preview {
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .image-preview img {
+        max-height: 300px;
+        width: 100%;
+        object-fit: cover;
+    }
+
+    .fake-mode-indicator {
+        margin-top: 20px;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public bool IsFakeModeEnabled { get; set; }
+
+    [Parameter]
+    public EventCallback<DesignRequest> OnSubmit { get; set; }
+
+    private string ImageUrl { get; set; } = "";
+    private string Prompt { get; set; } = "";
+    private string ImagePreviewUrl { get; set; } = "";
+
+    private bool CanSubmit => !string.IsNullOrWhiteSpace(Prompt) && 
+                             !string.IsNullOrWhiteSpace(ImagePreviewUrl);
+
+    protected override void OnInitialized()
+    {
+        // Use placeholder image in fake mode
+        if (IsFakeModeEnabled)
+        {
+            ImagePreviewUrl = "https://via.placeholder.com/400x300?text=Sample+Room";
+            ImageUrl = ImagePreviewUrl;
+        }
+    }
+
+    private void OnUploadClick()
+    {
+        // In a real implementation, this would trigger a file input
+        // For the web version, we'll simulate with a placeholder
+        if (IsFakeModeEnabled)
+        {
+            ImageUrl = "https://via.placeholder.com/400x300?text=Uploaded+Image";
+            ImagePreviewUrl = ImageUrl;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (!CanSubmit) return;
+
+        var request = new DesignRequest
+        {
+            OriginalImageUrl = ImageUrl,
+            Prompt = Prompt,
+            Status = "Pending"
+        };
+
+        await OnSubmit.InvokeAsync(request);
+    }
+}

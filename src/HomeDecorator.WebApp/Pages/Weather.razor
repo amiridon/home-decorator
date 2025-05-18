@@ -1,0 +1,89 @@
+﻿@page "/settings"
+@using HomeDecorator.Core.Services
+@inject NavigationManager Navigation
+
+<PageTitle>Settings - Home Decorator</PageTitle>
+
+<div class="container">
+    <h2 class="mb-4">Settings</h2>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="h5 mb-0">Application Settings</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="fakeModeSwitch" checked @onchange="ToggleFakeMode">
+                <label class="form-check-label" for="fakeModeSwitch">Fake Data Mode</label>
+                <div class="form-text">When enabled, mock services will be used instead of real APIs.</div>
+            </div>
+
+            <div class="mb-3">
+                <label for="languageSelect" class="form-label">Language</label>
+                <select class="form-select" id="languageSelect">
+                    <option selected>English</option>
+                    <option>Spanish</option>
+                    <option>French</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Theme</label>
+                <div class="btn-group w-100">
+                    <input type="radio" class="btn-check" name="theme" id="lightTheme" checked autocomplete="off">
+                    <label class="btn btn-outline-primary" for="lightTheme">Light</label>
+
+                    <input type="radio" class="btn-check" name="theme" id="darkTheme" autocomplete="off">
+                    <label class="btn btn-outline-primary" for="darkTheme">Dark</label>
+
+                    <input type="radio" class="btn-check" name="theme" id="systemTheme" autocomplete="off">
+                    <label class="btn btn-outline-primary" for="systemTheme">System</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="h5 mb-0">Account</h3>
+        </div>
+        <div class="card-body">
+            <p><strong>Email:</strong> demo@example.com</p>
+            <p><strong>Credit Balance:</strong> 10</p>
+            <button class="btn btn-primary mb-3">Manage Subscription</button>
+            <div class="d-grid">
+                <button class="btn btn-outline-danger" @onclick="LogOut">Log Out</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="h5 mb-0">About</h3>
+        </div>
+        <div class="card-body">
+            <p><strong>Version:</strong> 1.0.0 (Web Preview)</p>
+            <p><strong>Build:</strong> Week 1 - Mobile Test-Harness</p>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary">Privacy Policy</button>
+                <button class="btn btn-sm btn-outline-secondary">Terms of Service</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _fakeMode = true;
+
+    private void ToggleFakeMode(ChangeEventArgs e)
+    {
+        _fakeMode = (bool)e.Value;
+        // In a real implementation, this would update the feature flag service
+    }
+
+    private void LogOut()
+    {
+        // In a real implementation, this would log the user out
+        Navigation.NavigateTo("/");
+    }
+}

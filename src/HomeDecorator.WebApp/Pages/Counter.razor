@@ -1,0 +1,139 @@
+﻿@page "/history"
+@using HomeDecorator.Shared.Components
+@using HomeDecorator.Shared.Models
+
+<PageTitle>Design History - Home Decorator</PageTitle>
+
+<div class="container">
+    <h2 class="mb-4">Design History</h2>
+
+    @if (DesignRequests.Count == 0)
+    {
+        <div class="alert alert-info">
+            <p class="mb-0">You haven't created any designs yet. Go to the home page to create your first design!</p>
+        </div>
+    }
+    else
+    {
+        <div class="mb-3">
+            <div class="input-group">
+                <span class="input-group-text">
+                    <i class="bi bi-search"></i>
+                </span>
+                <input type="text" class="form-control" placeholder="Search designs..." @bind-value="searchTerm" @bind-value:event="oninput">
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col">
+                <div class="btn-group" role="group">
+                    <input type="radio" class="btn-check" name="filter" id="allFilter" checked @onclick="@(() => FilterDesigns(FilterAll))">
+                    <label class="btn btn-outline-primary" for="allFilter">All</label>
+
+                    <input type="radio" class="btn-check" name="filter" id="pendingFilter" @onclick="@(() => FilterDesigns(FilterPending))">
+                    <label class="btn btn-outline-primary" for="pendingFilter">Pending</label>
+
+                    <input type="radio" class="btn-check" name="filter" id="completedFilter" @onclick="@(() => FilterDesigns(FilterCompleted))">
+                    <label class="btn btn-outline-primary" for="completedFilter">Completed</label>
+                </div>
+            </div>
+            <div class="col text-end">
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        Sort: @sortOrder
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" @onclick="@(() => SortDesigns(SortNewest))">Newest First</a></li>
+                        <li><a class="dropdown-item" @onclick="@(() => SortDesigns(SortOldest))">Oldest First</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        @foreach (var request in filteredRequests)
+        {
+            <DesignRequestCard DesignRequest="request" />
+        }
+    }
+</div>
+
+@code {
+    // Filter constants
+    private const string FilterAll = "all";
+    private const string FilterPending = "pending";
+    private const string FilterCompleted = "completed";
+    
+    // Sort constants
+    private const string SortNewest = "newest";
+    private const string SortOldest = "oldest";
+
+    private List<DesignRequest> DesignRequests { get; set; } = new();
+    private List<DesignRequest> filteredRequests => FilterAndSortRequests();
+    private string searchTerm = "";
+    private string currentFilter = FilterAll;
+    private string sortOrder = SortNewest;
+
+    protected override void OnInitialized()
+    {
+        // Add mock data
+        for (int i = 1; i <= 5; i++)
+        {
+            DesignRequests.Add(new DesignRequest
+            {
+                Id = Guid.NewGuid().ToString(),
+                OriginalImageUrl = $"https://via.placeholder.com/400x300?text=Original+Room+{i}",
+                GeneratedImageUrl = i < 4 ? $"https://via.placeholder.com/400x300?text=Generated+Design+{i}" : null,
+                Prompt = $"Transform this room into a {GetRandomStyle()} style with {GetRandomColor()} accents and {GetRandomFeature()}.",
+                Status = i < 3 ? "Completed" : (i < 4 ? "Processing" : "Pending"),
+                CreatedAt = DateTime.Now.AddDays(-i)
+            });
+        }
+    }
+
+    private List<DesignRequest> FilterAndSortRequests()
+    {
+        // Filter by search term and status
+        var filtered = DesignRequests.Where(r => 
+            (string.IsNullOrEmpty(searchTerm) || 
+             r.Prompt.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) &&
+            (currentFilter == FilterAll || 
+             r.Status.Equals(currentFilter, StringComparison.OrdinalIgnoreCase))
+        ).ToList();
+
+        // Sort
+        if (sortOrder == SortNewest)
+            filtered = filtered.OrderByDescending(r => r.CreatedAt).ToList();
+        else
+            filtered = filtered.OrderBy(r => r.CreatedAt).ToList();
+
+        return filtered;
+    }
+
+    private void FilterDesigns(string filter)
+    {
+        currentFilter = filter;
+    }
+
+    private void SortDesigns(string sort)
+    {
+        sortOrder = sort;
+    }
+
+    private string GetRandomStyle()
+    {
+        string[] styles = { "modern", "minimalist", "industrial", "Scandinavian", "mid-century", "coastal" };
+        return styles[new Random().Next(styles.Length)];
+    }
+
+    private string GetRandomColor()
+    {
+        string[] colors = { "blue", "green", "earth tone", "neutral", "warm", "cool" };
+        return colors[new Random().Next(colors.Length)];
+    }
+
+    private string GetRandomFeature()
+    {
+        string[] features = { "natural lighting", "wood elements", "statement furniture", "plants", "built-in storage" };
+        return features[new Random().Next(features.Length)];
+    }
+}

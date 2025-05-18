@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="HomeDecorator.MauiApp.Views.HomePage"
+             Title="Home Decorator">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <VerticalStackLayout Grid.Row="0"
+                Padding="20"
+                BackgroundColor="{AppThemeBinding Light=#f2f2f7, Dark=#1c1c1e}">
+            <Label Text="Home Decorator"
+                    Style="{StaticResource Headline}"
+                    HorizontalOptions="Center"/>
+            <Label Text="Transform your space with AI"
+                    Style="{StaticResource SubHeadline}"
+                    HorizontalOptions="Center"/>
+        </VerticalStackLayout>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="20"
+                    Spacing="20">
+                <Frame BorderColor="LightGray"
+                        Padding="0"
+                        HasShadow="True"
+                        CornerRadius="10">
+                    <Grid RowDefinitions="Auto,*,Auto"
+                            Padding="15">
+                        <Label Text="Get Started"
+                                FontSize="18"
+                                FontAttributes="Bold"
+                                Grid.Row="0"/>
+                        <Label Text="Take a photo of a room and let AI transform it with a new design."
+                               Grid.Row="1"
+                                Margin="0,5,0,10"/>
+                        <Button Text="Start New Design"
+                                Grid.Row="2"
+                                BackgroundColor="#007AFF"
+                                TextColor="White"
+                                Clicked="OnNewDesignClicked"/>
+                    </Grid>
+                </Frame>
+
+                <Frame BorderColor="LightGray"
+                        Padding="0"
+                        HasShadow="True"
+                        CornerRadius="10">
+                    <Grid RowDefinitions="Auto,*,Auto"
+                            Padding="15">
+                        <Label Text="Your Credits"
+                                FontSize="18"
+                                FontAttributes="Bold"
+                                Grid.Row="0"/>
+                        <Label x:Name="CreditsLabel"
+                                Text="10 credits remaining"
+                                Grid.Row="1"
+                                Margin="0,5,0,10"/>
+                        <Button Text="Buy More Credits"
+                                Grid.Row="2"
+                                BackgroundColor="#34C759"
+                                TextColor="White"
+                                Clicked="OnBuyCreditsClicked"/>
+                    </Grid>
+                </Frame>
+
+                <Frame BorderColor="LightGray"
+                        Padding="0"
+                        HasShadow="True"
+                        CornerRadius="10">
+                    <Grid RowDefinitions="Auto,*"
+                            Padding="15">
+                        <Label Text="Recent Designs"
+                                FontSize="18"
+                                FontAttributes="Bold"
+                                Grid.Row="0"/>
+                        <Label Text="You don't have any designs yet. Get started by creating your first design."
+                               Grid.Row="1"
+                                Margin="0,5,0,0"
+                                IsVisible="{Binding HasNoDesigns}"/>
+                        <!-- We'll add a CollectionView here later -->
+                    </Grid>
+                </Frame>
+
+                <Frame BorderColor="LightGray"
+                        Padding="15"
+                        HasShadow="True"
+                        CornerRadius="10">
+                    <HorizontalStackLayout HorizontalOptions="Center">
+                        <Label VerticalOptions="Center"
+                                Text="Fake Data Mode: "/>
+                        <Switch x:Name="FakeDataSwitch"
+                                Toggled="OnFakeDataToggled"/>
+                    </HorizontalStackLayout>
+                </Frame>
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <HorizontalStackLayout Grid.Row="2"
+                BackgroundColor="{AppThemeBinding Light=#f2f2f7, Dark=#1c1c1e}"
+                               HorizontalOptions="Center"
+                Padding="0,10"
+                Spacing="40">
+            <Button Text="Home"
+                    BackgroundColor="Transparent"
+                    TextColor="#007AFF"/>
+            <Button Text="History"
+                    BackgroundColor="Transparent"
+                    TextColor="Gray"
+                    Clicked="OnHistoryClicked"/>
+            <Button Text="Settings"
+                    BackgroundColor="Transparent"
+                    TextColor="Gray"
+                    Clicked="OnSettingsClicked"/>
+        </HorizontalStackLayout>
+    </Grid>
+</ContentPage>

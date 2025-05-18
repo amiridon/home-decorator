@@ -66,6 +66,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\HomeDecorator.Core\HomeDecorator.Core.csproj" />
+	  <ProjectReference Include="..\HomeDecorator.Shared\HomeDecorator.Shared.csproj" />
 	</ItemGroup>
 
 </Project>

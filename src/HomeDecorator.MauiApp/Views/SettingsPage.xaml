@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="HomeDecorator.MauiApp.Views.SettingsPage"
+             Title="Settings">
+    <ScrollView>
+        <VerticalStackLayout Padding="20"
+                Spacing="20">
+            <Frame BorderColor="LightGray"
+                    HasShadow="True"
+                    CornerRadius="10"
+                    Padding="0">
+                <Grid Padding="15"
+                        RowDefinitions="Auto,*">
+                    <Label Text="Developer Settings"
+                            FontAttributes="Bold"
+                            FontSize="18"
+                            Grid.Row="0"/>
+
+                    <VerticalStackLayout Grid.Row="1"
+                            Spacing="15"
+                            Margin="0,10,0,0">
+                        <HorizontalStackLayout>
+                            <Label Text="Fake Data Mode"
+                                   VerticalOptions="Center"
+                                   HorizontalOptions="StartAndExpand"/>
+                            <Switch x:Name="FakeDataSwitch"
+                                    Toggled="OnFakeDataToggled"
+                                    HorizontalOptions="End"/>
+                        </HorizontalStackLayout>
+
+                        <Label Text="When enabled, the app will use mock data instead of making real API calls. This is useful for development and testing."
+                               TextColor="Gray"
+                               FontSize="Small"/>
+                    </VerticalStackLayout>
+                </Grid>
+            </Frame>
+
+            <Frame BorderColor="LightGray"
+                    HasShadow="True"
+                    CornerRadius="10"
+                    Padding="0">
+                <Grid Padding="15"
+                        RowDefinitions="Auto,*">
+                    <Label Text="About"
+                            FontAttributes="Bold"
+                            FontSize="18"
+                            Grid.Row="0"/>
+
+                    <VerticalStackLayout Grid.Row="1"
+                            Spacing="10"
+                            Margin="0,10,0,0">
+                        <Label Text="Home Decorator"
+                                FontAttributes="Bold"
+                                FontSize="16"/>
+                        <Label Text="Version 1.0.0"/>
+                        <Label Text="© 2025 Home Decorator Team"/>
+
+                        <Button Text="Privacy Policy"
+                                BackgroundColor="Transparent"
+                                TextColor="#007AFF"
+                                HorizontalOptions="Start"
+                                Margin="0,10,0,0"
+                                Clicked="OnPrivacyPolicyClicked"/>
+
+                        <Button Text="Terms of Service"
+                                BackgroundColor="Transparent"
+                                TextColor="#007AFF"
+                                HorizontalOptions="Start"
+                                Clicked="OnTermsOfServiceClicked"/>
+                    </VerticalStackLayout>
+                </Grid>
+            </Frame>
+
+            <Button Text="Log Out"
+                    BackgroundColor="#FF3B30"
+                    TextColor="White"
+                    HorizontalOptions="Fill"
+                    Clicked="OnLogoutClicked"/>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

@@ -1,0 +1,81 @@
+﻿@page "/"
+@using HomeDecorator.Shared.Components
+@using HomeDecorator.Shared.Models
+@using HomeDecorator.Core.Services
+
+<PageTitle>Home Decorator - Web Preview</PageTitle>
+
+<div class="container">
+    <header class="d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom">
+        <a href="/" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto link-body-emphasis text-decoration-none">
+            <span class="fs-4">Home Decorator</span>
+        </a>
+        <ul class="nav nav-pills">
+            <li class="nav-item"><a href="#" class="nav-link active" aria-current="page">Home</a></li>
+            <li class="nav-item"><a href="/counter" class="nav-link">History</a></li>
+            <li class="nav-item"><a href="/weather" class="nav-link">Settings</a></li>
+        </ul>
+    </header>
+</div>
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h2 class="mb-4 text-center">AI-Driven Home Design Visualization</h2>
+            <p class="lead text-center mb-5">
+                Transform your space with AI. Take a photo, describe your vision, and see it come to life.
+            </p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <DesignRequestForm IsFakeModeEnabled="true" OnSubmit="HandleDesignSubmit" />
+        </div>
+    </div>
+
+    @if (SubmittedRequests.Count > 0)
+    {
+        <div class="row mt-5">
+            <div class="col-md-12">
+                <h3 class="mb-4">Your Recent Designs</h3>
+                @foreach (var request in SubmittedRequests)
+                {
+                    <DesignRequestCard DesignRequest="request" />
+                }
+            </div>
+        </div>
+    }
+
+    <div class="alert alert-info mt-5" role="alert">
+        <h4 class="alert-heading">Web Preview Mode</h4>
+        <p>This is a web preview of the Home Decorator mobile application. It simulates the functionality
+            of the MAUI app in your browser.</p>
+        <hr>
+        <p class="mb-0">All features use mock data for demonstration purposes.</p>
+    </div>
+</div>
+
+@code {
+    private List<DesignRequest> SubmittedRequests { get; set; } = new List<DesignRequest>();
+
+    private async Task HandleDesignSubmit(DesignRequest request)
+    {
+        // Simulate processing delay
+        await Task.Delay(1500);
+
+        // Update status
+        request.Status = "Processing";
+        SubmittedRequests.Add(request);
+        StateHasChanged();
+
+        // Simulate completion delay
+        await Task.Delay(3000);
+
+        // Complete the request with a mock generated image
+        request.Status = "Completed";
+        request.GeneratedImageUrl = "https://via.placeholder.com/400x300?text=AI+Generated+Design";
+        StateHasChanged();
+    }
+}
+ 

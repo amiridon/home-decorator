@@ -1,0 +1,137 @@
+@namespace HomeDecorator.Shared.Components
+@using HomeDecorator.Shared.Models
+
+<div class="design-request-card">
+    <div class="card">
+        <div class="card-header">
+            <h5>Design Request</h5>
+            <span class="status @GetStatusClass()">@DesignRequest.Status</span>
+        </div>
+        <div class="card-body">
+            <div class="images-container">
+                <div class="image-container">
+                    <h6>Original</h6>
+                    @if (!string.IsNullOrEmpty(DesignRequest.OriginalImageUrl))
+                    {
+                        <img src="@DesignRequest.OriginalImageUrl" alt="Original Image" class="img-fluid" />
+                    }
+                    else
+                    {
+                        <div class="placeholder-image">No Image</div>
+                    }
+                </div>
+                <div class="image-container">
+                    <h6>Generated</h6>
+                    @if (!string.IsNullOrEmpty(DesignRequest.GeneratedImageUrl))
+                    {
+                        <img src="@DesignRequest.GeneratedImageUrl" alt="Generated Image" class="img-fluid" />
+                    }
+                    else
+                    {
+                        <div class="placeholder-image">Pending Generation</div>
+                    }
+                </div>
+            </div>
+            <div class="prompt-container">
+                <h6>Prompt</h6>
+                <p>@DesignRequest.Prompt</p>
+            </div>
+            <div class="date-container">
+                <small>Created: @DesignRequest.CreatedAt.ToString("g")</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .design-request-card {
+        margin-bottom: 1.5rem;
+    }
+    
+    .card {
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background-color: #f8f9fa;
+    }
+    
+    .status {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+    
+    .status-pending {
+        background-color: #ffc107;
+        color: #212529;
+    }
+    
+    .status-processing {
+        background-color: #17a2b8;
+        color: white;
+    }
+    
+    .status-completed {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .status-failed {
+        background-color: #dc3545;
+        color: white;
+    }
+    
+    .images-container {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .image-container {
+        flex: 1;
+    }
+    
+    .img-fluid {
+        border-radius: 4px;
+        width: 100%;
+        height: auto;
+        object-fit: cover;
+    }
+    
+    .placeholder-image {
+        height: 150px;
+        background-color: #f1f1f1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        color: #6c757d;
+    }
+    
+    .prompt-container {
+        margin-bottom: 1rem;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public DesignRequest DesignRequest { get; set; }
+
+    private string GetStatusClass()
+    {
+        return DesignRequest.Status.ToLower() switch
+        {
+            "pending" => "status-pending",
+            "processing" => "status-processing",
+            "completed" => "status-completed",
+            "failed" => "status-failed",
+            _ => "status-pending"
+        };
+    }
+}
