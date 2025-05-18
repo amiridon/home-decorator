@@ -1,4 +1,6 @@
-﻿namespace HomeDecorator.Core.Services;
+﻿using System.Collections.Generic;
+
+namespace HomeDecorator.Core.Services;
 
 /// <summary>
 /// Service to manage feature flags throughout the application
