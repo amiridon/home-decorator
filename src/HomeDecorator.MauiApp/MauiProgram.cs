@@ -30,24 +30,30 @@ public static class MauiProgram
 
 		return builder.Build();
 	}
-
 	private static void RegisterServices(IServiceCollection services)
 	{       // Register pages
 		services.AddSingleton<HomePage>();
 		services.AddSingleton<SettingsPage>();
+		services.AddSingleton<BillingPage>();
+		services.AddSingleton<DesignHistoryPage>();
 		services.AddTransient<NewDesignPage>();
 
 		// Initialize feature flags with defaults
 		var initialFlags = new Dictionary<string, bool>
 		{
-			["IsFakeDataMode"] = true // Default to ON for development
+			["IsFakeDataMode"] = true, // Default to ON for development
+			["EnableStripeBilling"] = true, // Enable billing features
+			["EnableCreditLedger"] = true // Enable credit tracking
 		};
 
 		// Register core services
 		services.AddSingleton<IFeatureFlagService>(new FeatureFlagService(initialFlags));
 
-		// Register mock services for development
-		services.AddSingleton<IBillingService, MockBillingService>();
+		// Register credit ledger service
+		services.AddSingleton<ICreditLedgerService, MockCreditLedgerService>();
+
+		// Register enhanced mock services for development
+		services.AddSingleton<IBillingService, EnhancedMockBillingService>();
 		services.AddSingleton<IGenerationService, MockGenerationService>();
 		services.AddSingleton<IProductMatcherService, MockProductMatcherService>();
 		services.AddSingleton<IRecommendationService, MockRecommendationService>();

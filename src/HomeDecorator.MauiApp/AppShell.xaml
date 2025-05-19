@@ -11,17 +11,17 @@
 
     <Shell.FlyoutHeader>
         <Grid HeightRequest="120"
-                BackgroundColor="#007AFF">
+              BackgroundColor="#007AFF">
             <Image Source="dotnet_bot.png"
-                    HeightRequest="80"
-                    Margin="20"/>
+                   HeightRequest="80"
+                   Margin="20"/>
             <Label Text="Home Decorator"
-                    TextColor="White"
-                    FontSize="24"
-                    FontAttributes="Bold"
+                   TextColor="White"
+                   FontSize="24"
+                   FontAttributes="Bold"
                    HorizontalOptions="Center"
-                    VerticalOptions="End"
-                    Margin="0,0,0,15"/>
+                   VerticalOptions="End"
+                   Margin="0,0,0,15"/>
         </Grid>
     </Shell.FlyoutHeader>
 
@@ -30,17 +30,16 @@
         Icon="home.png"
         ContentTemplate="{DataTemplate views:HomePage}"
         Route="HomePage"/>
-
     <ShellContent
         Title="Design History"
         Icon="history.png"
-        ContentTemplate="{DataTemplate local:MainPage}"
+        ContentTemplate="{DataTemplate views:DesignHistoryPage}"
         Route="HistoryPage"/>
 
     <ShellContent
         Title="Billing"
         Icon="credit_card.png"
-        ContentTemplate="{DataTemplate local:MainPage}"
+        ContentTemplate="{DataTemplate views:BillingPage}"
         Route="BillingPage"/>
 
     <ShellContent
