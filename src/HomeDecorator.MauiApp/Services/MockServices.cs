@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using HomeDecorator.Core.Services;
 
@@ -89,72 +90,10 @@ namespace HomeDecorator.MauiApp.Services
 
             return Task.FromResult(products);
         }
-    }
-
-    /// <summary>
-    /// Mock implementation of IRecommendationService for development
-    /// </summary>
-    public class MockRecommendationService : IRecommendationService
-    {
-        // Mock product details for testing
-        private readonly Dictionary<string, Product> _mockProducts = new Dictionary<string, Product>
-        {
-            ["mock-product-1"] = new Product
-            {
-                Id = "mock-product-1",
-                Name = "Mid-Century Modern Sofa",
-                Price = 899.99M,
-                Currency = "USD",
-                Vendor = "MockFurnitureCo",
-                ThumbnailUrl = "https://via.placeholder.com/100x100?text=Sofa",
-                DetailUrl = "https://example.com/products/sofa"
-            },
-            ["mock-product-2"] = new Product
-            {
-                Id = "mock-product-2",
-                Name = "Pendant Light Fixture",
-                Price = 249.99M,
-                Currency = "USD",
-                Vendor = "MockLightingCo",
-                ThumbnailUrl = "https://via.placeholder.com/100x100?text=Light",
-                DetailUrl = "https://example.com/products/light"
-            },
-            ["mock-product-3"] = new Product
-            {
-                Id = "mock-product-3",
-                Name = "Area Rug 5'x7'",
-                Price = 199.99M,
-                Currency = "USD",
-                Vendor = "MockHomeCo",
-                ThumbnailUrl = "https://via.placeholder.com/100x100?text=Rug",
-                DetailUrl = "https://example.com/products/rug"
-            }
-        };
-
-        public Task<List<Product>> GetRecommendationsAsync(string imageUrl)
-        {
-            // Return mock products
-            return Task.FromResult(new List<Product>
-            {
-                _mockProducts["mock-product-1"],
-                _mockProducts["mock-product-2"],
-                _mockProducts["mock-product-3"]
-            });
-        }
-
-        public Task<List<Product>> RankAndFilterProductsAsync(List<(string ProductId, double Score)> productMatches)
-        {
-            // Convert product IDs to product details
-            var products = new List<Product>();
-            foreach (var (productId, _) in productMatches)
-            {
-                if (_mockProducts.TryGetValue(productId, out var product))
-                {
-                    products.Add(product);
-                }
-            }
-
-            return Task.FromResult(products);
-        }
-    }
+    }    /// <summary>
+         /// Mock implementation of IRecommendationService for development
+         /// This is kept for backward compatibility, implementation moved to separate file
+         /// </summary>
+    [Obsolete("Use the separate MockRecommendationService class instead")]
+    public class MockRecommendationService_Obsolete { }
 }

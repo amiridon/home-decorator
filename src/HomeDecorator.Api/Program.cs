@@ -1,7 +1,14 @@
+using HomeDecorator.Api.Endpoints;
+using HomeDecorator.Api.Services;
 using HomeDecorator.Core.Services;
 using Microsoft.AspNetCore.Http.Json;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Swashbuckle.AspNetCore.Swagger;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +23,24 @@ builder.Services.AddAuthorization();
 var featureFlags = new Dictionary<string, bool>();
 builder.Configuration.GetSection("FeatureFlags").Bind(featureFlags);
 builder.Services.AddSingleton<IFeatureFlagService>(new FeatureFlagService(featureFlags));
+
+// Register core services
+bool isFakeDataMode = builder.Configuration.GetValue<bool>("FeatureFlags:IsFakeDataMode");
+
+// Register credit ledger service
+builder.Services.AddSingleton<ICreditLedgerService, SqliteCreditLedgerService>();
+
+// Register billing service based on fake data mode
+if (isFakeDataMode)
+{
+    Console.WriteLine("Using mock billing service (fake data mode)");
+    builder.Services.AddSingleton<IBillingService, MockBillingService>();
+}
+else
+{
+    Console.WriteLine("Using Stripe billing service");
+    builder.Services.AddSingleton<IBillingService, StripeService>();
+}
 
 // Configure Azure Key Vault if enabled
 if (builder.Configuration.GetValue<bool>("KeyVault:Enabled"))
@@ -56,25 +81,8 @@ app.MapPost("/api/auth/login", () =>
 })
 .WithName("Login");
 
-app.MapGet("/api/billing/checkout/{packId}", (string packId) =>
-{
-    return TypedResults.StatusCode(StatusCodes.Status501NotImplemented);
-})
-.RequireAuthorization()
-.WithName("BillingCheckout");
-
-app.MapGet("/api/billing/portal", () =>
-{
-    return TypedResults.StatusCode(StatusCodes.Status501NotImplemented);
-})
-.RequireAuthorization()
-.WithName("BillingPortal");
-
-app.MapPost("/api/stripe/webhook", () =>
-{
-    return TypedResults.StatusCode(StatusCodes.Status501NotImplemented);
-})
-.WithName("StripeWebhook");
+// Map billing endpoints from the BillingEndpoints class
+app.MapBillingEndpoints();
 
 app.MapPost("/api/image-request", () =>
 {

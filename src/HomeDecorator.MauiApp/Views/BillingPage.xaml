@@ -3,53 +3,54 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="HomeDecorator.MauiApp.Views.BillingPage"
              Title="Billing">
-
-    <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto">
         <!-- Header with credit status -->
-        <Frame Grid.Row="0"
+        <Border Grid.Row="0"
                 Margin="15"
                 Padding="20"
                 BackgroundColor="#f0f8ff"
-                BorderColor="#007AFF">
-            <StackLayout>
+                Stroke="#007AFF"
+                StrokeThickness="1">
+            <VerticalStackLayout>
                 <Label Text="Credits Available"
-                        FontSize="14"
-                        TextColor="#555555"/>
+                       FontSize="14"
+                       TextColor="#555555"/>
                 <Label x:Name="CreditsLabel"
-                        Text="150 credits"
-                        FontSize="28"
-                        FontAttributes="Bold"
-                        TextColor="#007AFF"/>
-                <Label Text="Last updated: May 19, 2025"
-                        FontSize="12"
-                        TextColor="#888888"/>
-            </StackLayout>
-        </Frame>
+                       Text="Loading..."
+                       FontSize="28"
+                       FontAttributes="Bold"
+                       TextColor="#007AFF"/>
+                <Label x:Name="LastUpdatedLabel"
+                       Text="Last updated: --"
+                       FontSize="12"
+                       TextColor="#888888"/>
+            </VerticalStackLayout>
+        </Border>
 
         <!-- Credit pack options -->
         <Label Grid.Row="1"
-                Text="Purchase Credit Packs"
-                FontSize="20"
-                Margin="15,0,15,0"
-                FontAttributes="Bold"/>
+               Text="Purchase Credit Packs"
+               FontSize="20"
+               Margin="15,0,15,0"
+               FontAttributes="Bold"/>
 
         <ScrollView Grid.Row="2"
-                Margin="15,0">
+                    Margin="15,0">
             <StackLayout Spacing="15"
-                    Padding="0,10">
+                         Padding="0,10">
                 <!-- Credit Pack 1 -->
                 <Frame BorderColor="#dddddd"
-                        Padding="15"
-                        HasShadow="True">
+                       Padding="15"
+                       HasShadow="True">
                     <Grid ColumnDefinitions="*, Auto">
                         <StackLayout Grid.Column="0">
                             <Label Text="Starter Pack"
-                                    FontSize="18"
-                                    FontAttributes="Bold"/>
+                                   FontSize="18"
+                                   FontAttributes="Bold"/>
                             <Label Text="50 credits"
-                                    TextColor="#555555"/>
+                                   TextColor="#555555"/>
                             <Label Text="Perfect for trying out the application"
-                                    TextColor="#888888"/>
+                                   TextColor="#888888"/>
                         </StackLayout>
                         <Button Grid.Column="1"
                                 Text="$4.99"
@@ -63,17 +64,17 @@
 
                 <!-- Credit Pack 2 -->
                 <Frame BorderColor="#dddddd"
-                        Padding="15"
-                        HasShadow="True">
+                       Padding="15"
+                       HasShadow="True">
                     <Grid ColumnDefinitions="*, Auto">
                         <StackLayout Grid.Column="0">
                             <Label Text="Standard Pack"
-                                    FontSize="18"
-                                    FontAttributes="Bold"/>
+                                   FontSize="18"
+                                   FontAttributes="Bold"/>
                             <Label Text="200 credits"
-                                    TextColor="#555555"/>
+                                   TextColor="#555555"/>
                             <Label Text="Our most popular option"
-                                    TextColor="#888888"/>
+                                   TextColor="#888888"/>
                         </StackLayout>
                         <Button Grid.Column="1"
                                 Text="$14.99"
@@ -87,17 +88,17 @@
 
                 <!-- Credit Pack 3 -->
                 <Frame BorderColor="#dddddd"
-                        Padding="15"
-                        HasShadow="True">
+                       Padding="15"
+                       HasShadow="True">
                     <Grid ColumnDefinitions="*, Auto">
                         <StackLayout Grid.Column="0">
                             <Label Text="Premium Pack"
-                                    FontSize="18"
-                                    FontAttributes="Bold"/>
+                                   FontSize="18"
+                                   FontAttributes="Bold"/>
                             <Label Text="500 credits"
-                                    TextColor="#555555"/>
+                                   TextColor="#555555"/>
                             <Label Text="Best value for power users"
-                                    TextColor="#888888"/>
+                                   TextColor="#888888"/>
                         </StackLayout>
                         <Button Grid.Column="1"
                                 Text="$29.99"
@@ -111,17 +112,17 @@
 
                 <!-- Credit Pack 4 -->
                 <Frame BorderColor="#dddddd"
-                        Padding="15"
-                        HasShadow="True">
+                       Padding="15"
+                       HasShadow="True">
                     <Grid ColumnDefinitions="*, Auto">
                         <StackLayout Grid.Column="0">
                             <Label Text="Professional Pack"
-                                    FontSize="18"
-                                    FontAttributes="Bold"/>
+                                   FontSize="18"
+                                   FontAttributes="Bold"/>
                             <Label Text="1200 credits"
-                                    TextColor="#555555"/>
+                                   TextColor="#555555"/>
                             <Label Text="For interior design professionals"
-                                    TextColor="#888888"/>
+                                   TextColor="#888888"/>
                         </StackLayout>
                         <Button Grid.Column="1"
                                 Text="$59.99"
@@ -134,23 +135,43 @@
                 </Frame>
             </StackLayout>
         </ScrollView>
+        <!-- Transaction History Section -->
+        <Label Grid.Row="3"
+               Text="Recent Transactions"
+               FontSize="20"
+               Margin="15,10,15,0"
+               FontAttributes="Bold"/>
+
+        <ScrollView Grid.Row="4"
+                    Margin="15,0,15,15"
+                    HeightRequest="200">
+            <StackLayout x:Name="TransactionsStack"
+                         Spacing="8"
+                         Padding="0,10">
+                <Label Text="Loading transactions..."
+                       HorizontalOptions="Center"
+                       TextColor="#888888"/>
+            </StackLayout>
+        </ScrollView>
 
         <!-- Footer with subscription info -->
-        <Frame Grid.Row="3"
+        <Border Grid.Row="5"
                 Margin="15"
                 Padding="15"
-                BackgroundColor="#f7f7f7">
-            <StackLayout>
+                BackgroundColor="#f7f7f7"
+                Stroke="#dddddd"
+                StrokeThickness="1">
+            <VerticalStackLayout>
                 <Label Text="Subscription Options"
-                        FontAttributes="Bold"/>
+                       FontAttributes="Bold"/>
                 <Label Text="Manage your subscription and billing details"
-                        TextColor="#555555"/>
+                       TextColor="#555555"/>
                 <Button Text="Billing Portal"
                         Margin="0,10,0,0"
                         BackgroundColor="#555555"
                         TextColor="White"
                         Clicked="OnBillingPortalClicked"/>
-            </StackLayout>
-        </Frame>
+            </VerticalStackLayout>
+        </Border>
     </Grid>
 </ContentPage>

@@ -42,13 +42,12 @@ namespace HomeDecorator.MauiApp.Services
 
             return Task.FromResult(_balances[userId]);
         }
-
         public Task<CreditTransaction> AddCreditsAsync(
             string userId,
             int amount,
             string type,
             string description,
-            string referenceId = null)
+            string? referenceId = null)
         {
             // Create transaction
             var transaction = new CreditTransaction
@@ -79,13 +78,12 @@ namespace HomeDecorator.MauiApp.Services
 
             return Task.FromResult(transaction);
         }
-
         public Task<CreditTransaction> DeductCreditsAsync(
             string userId,
             int amount,
             string type,
             string description,
-            string referenceId = null)
+            string? referenceId = null)
         {
             // Ensure positive amount for deduction logic
             int positiveAmount = Math.Abs(amount);
