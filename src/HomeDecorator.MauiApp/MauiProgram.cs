@@ -61,9 +61,12 @@ public static class MauiProgram
 
 		// Register core services
 		services.AddSingleton<IFeatureFlagService>(new FeatureFlagService(initialFlags));
-
 		// Register API service for connecting to backend
-		services.AddSingleton<ApiService>();
+		services.AddSingleton<ApiService>(sp =>
+		{
+			var handler = sp.GetRequiredService<HttpMessageHandler>();
+			return new ApiService(handler);
+		});
 
 		// Register credit ledger service
 		services.AddSingleton<ICreditLedgerService, MockCreditLedgerService>();

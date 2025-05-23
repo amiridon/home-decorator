@@ -24,13 +24,17 @@
                 "/consoleloggerparameters:NoSummary"
             ],
             "problemMatcher": "$msCompile"
-        },
-        {
+        },        {
             "label": "build-all",
             "dependsOn": [
                 "build-api",
                 "build-maui"
-            ]
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
         }
     ]
 }
