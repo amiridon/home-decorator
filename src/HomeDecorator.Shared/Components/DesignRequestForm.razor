@@ -7,8 +7,7 @@
     <div class="form-group mb-3">
         <label for="imageUrl">Image URL or Upload</label>
         <div class="input-group">
-            <input type="text" class="form-control" id="imageUrl" placeholder="Enter image URL" 
-                   @bind="ImageUrl" />
+            <input type="text" class="form-control" id="imageUrl" placeholder="Enter image URL" @bind="ImageUrl" />
         </div>
         <div class="mt-2">
             <button class="btn btn-outline-secondary btn-sm" @onclick="OnUploadClick">
@@ -19,8 +18,8 @@
 
     <div class="form-group mb-3">
         <label for="prompt">Design Prompt</label>
-        <textarea class="form-control" id="prompt" rows="3" placeholder="Describe how you'd like to transform this space..." 
-                 @bind="Prompt"></textarea>
+        <textarea class="form-control" id="prompt" rows="3"
+            placeholder="Describe how you'd like to transform this space..." @bind="Prompt"></textarea>
     </div>
 
     @if (!string.IsNullOrEmpty(ImagePreviewUrl))
@@ -81,8 +80,8 @@
     private string Prompt { get; set; } = "";
     private string ImagePreviewUrl { get; set; } = "";
 
-    private bool CanSubmit => !string.IsNullOrWhiteSpace(Prompt) && 
-                             !string.IsNullOrWhiteSpace(ImagePreviewUrl);
+    private bool CanSubmit => !string.IsNullOrWhiteSpace(Prompt) &&
+    !string.IsNullOrWhiteSpace(ImagePreviewUrl);
 
     protected override void OnInitialized()
     {
@@ -107,9 +106,7 @@
 
     private async Task HandleSubmit()
     {
-        if (!CanSubmit) return;
-
-        var request = new DesignRequest
+        if (!CanSubmit) return; var request = new DesignRequest
         {
             OriginalImageUrl = ImageUrl,
             Prompt = Prompt,

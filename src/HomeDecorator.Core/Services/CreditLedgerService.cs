@@ -3,21 +3,20 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HomeDecorator.Core.Services
-{
-    /// <summary>
-    /// Represents a credit transaction in the ledger
-    /// </summary>
+{    /// <summary>
+     /// Represents a credit transaction in the ledger
+     /// </summary>
     public class CreditTransaction
     {
         /// <summary>
         /// Unique identifier for the transaction
         /// </summary>
-        public string Id { get; set; }
+        public required string Id { get; set; }
 
         /// <summary>
         /// User ID associated with this transaction
         /// </summary>
-        public string UserId { get; set; }
+        public required string UserId { get; set; }
 
         /// <summary>
         /// Amount of credits (positive for additions, negative for deductions)
@@ -27,14 +26,14 @@ namespace HomeDecorator.Core.Services
         /// <summary>
         /// Type of transaction (Purchase, Usage, Refund, etc.)
         /// </summary>
-        public string Type { get; set; }
+        public required string Type { get; set; }
 
         /// <summary>
         /// Description of the transaction
         /// </summary>
-        public string Description { get; set; }        /// <summary>
-                                                       /// References to external systems (e.g., Stripe payment ID)
-                                                       /// </summary>
+        public required string Description { get; set; }/// <summary>
+                                                        /// References to external systems (e.g., Stripe payment ID)
+                                                        /// </summary>
         public string? ReferenceId { get; set; }
 
         /// <summary>

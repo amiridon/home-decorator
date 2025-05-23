@@ -47,63 +47,63 @@
     .design-request-card {
         margin-bottom: 1.5rem;
     }
-    
+
     .card {
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
-    
+
     .card-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         background-color: #f8f9fa;
     }
-    
+
     .status {
         padding: 4px 8px;
         border-radius: 4px;
         font-size: 0.8rem;
         font-weight: bold;
     }
-    
+
     .status-pending {
         background-color: #ffc107;
         color: #212529;
     }
-    
+
     .status-processing {
         background-color: #17a2b8;
         color: white;
     }
-    
+
     .status-completed {
         background-color: #28a745;
         color: white;
     }
-    
+
     .status-failed {
         background-color: #dc3545;
         color: white;
     }
-    
+
     .images-container {
         display: flex;
         gap: 1rem;
         margin-bottom: 1rem;
     }
-    
+
     .image-container {
         flex: 1;
     }
-    
+
     .img-fluid {
         border-radius: 4px;
         width: 100%;
         height: auto;
         object-fit: cover;
     }
-    
+
     .placeholder-image {
         height: 150px;
         background-color: #f1f1f1;
@@ -113,7 +113,7 @@
         border-radius: 4px;
         color: #6c757d;
     }
-    
+
     .prompt-container {
         margin-bottom: 1rem;
     }
@@ -121,7 +121,7 @@
 
 @code {
     [Parameter]
-    public DesignRequest DesignRequest { get; set; }
+    public required DesignRequest DesignRequest { get; set; }
 
     private string GetStatusClass()
     {

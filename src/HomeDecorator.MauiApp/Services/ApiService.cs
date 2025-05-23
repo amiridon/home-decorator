@@ -14,9 +14,7 @@ namespace HomeDecorator.MauiApp.Services
     public class ApiService
     {
         private readonly HttpClient _httpClient;
-        private readonly string _baseUrl;
-
-        public ApiService(HttpMessageHandler handler = null)
+        private readonly string _baseUrl; public ApiService(HttpMessageHandler? handler = null)
         {
             _httpClient = handler != null ? new HttpClient(handler) : new HttpClient();
 
