@@ -46,11 +46,31 @@
                                                 Placeholder="Examples: Modern farmhouse living room with natural wood accents; Minimalist kitchen with clean lines and marble countertops"
                                                 HeightRequest="120"
                                                 AutoSize="TextChanges"/>
-
                                         <Button Text="Generate Design"
                                                 BackgroundColor="#34C759"
                                                 TextColor="White"
                                                 Clicked="OnGenerateDesignClicked"/>
+                                </VerticalStackLayout>
+                        </Border>
+
+                        <!-- Generated Image Display -->
+                        <Border Stroke="LightGray"
+                                StrokeThickness="1"
+                                StrokeShape="{RoundRectangle CornerRadius=10}"
+                                Padding="20">
+                                <VerticalStackLayout Spacing="15">
+                                        <Label Text="Generated Design"
+                                               FontSize="20"
+                                               FontAttributes="Bold"/>
+
+                                        <Image x:Name="GeneratedImage"
+                                               IsVisible="False"
+                                               HeightRequest="300"
+                                               HorizontalOptions="Center"/>
+
+                                        <Label Text="Your AI-generated design will appear here"
+                                               HorizontalOptions="Center"
+                                               TextColor="Gray"/>
                                 </VerticalStackLayout>
                         </Border>
                         <Border x:Name="FakeModeIndicator"

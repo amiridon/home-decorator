@@ -22,10 +22,10 @@ namespace HomeDecorator.MauiApp.Services
             _baseUrl = "https://your-api-url.com";
 
 #if DEBUG
-            // For local development use localhost
+            // For local development use localhost - using HTTP since API runs on HTTP in development
             _baseUrl = DeviceInfo.Platform == DevicePlatform.Android
-                ? "https://10.0.2.2:5184" // Android emulator uses this IP for localhost
-                : "https://localhost:5184";
+                ? "http://10.0.2.2:5184" // Android emulator uses this IP for localhost
+                : "http://localhost:5184";
 #endif
         }
 
