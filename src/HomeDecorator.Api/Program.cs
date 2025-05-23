@@ -36,39 +36,20 @@ builder.Configuration.GetSection("FeatureFlags").Bind(featureFlags);
 builder.Services.AddSingleton<IFeatureFlagService>(new FeatureFlagService(featureFlags));
 
 // Register core services
-bool isFakeDataMode = builder.Configuration.GetValue<bool>("FeatureFlags:IsFakeDataMode");
 
 // Register credit ledger service
 builder.Services.AddSingleton<ICreditLedgerService, SqliteCreditLedgerService>();
 
-// Register billing service based on fake data mode
-if (isFakeDataMode)
-{
-    Console.WriteLine("Using mock billing service (fake data mode)");
-    builder.Services.AddSingleton<IBillingService, MockBillingService>();
-}
-else
-{
-    Console.WriteLine("Using Stripe billing service");
-    builder.Services.AddSingleton<IBillingService, StripeService>();
-}
+// Register billing service
+Console.WriteLine("Using Stripe billing service");
+builder.Services.AddSingleton<IBillingService, StripeService>();
 
-// Register image generation services based on fake data mode
-if (isFakeDataMode)
-{
-    Console.WriteLine("Using mock image generation services (fake data mode)");
-    builder.Services.AddSingleton<IGenerationService, MockGenerationService>();
-    builder.Services.AddSingleton<IStorageService, MockStorageService>();
-    builder.Services.AddSingleton<IProductMatcherService, MockProductMatcherService>();
-}
-else
-{
-    Console.WriteLine("Using real image generation services");
-    builder.Services.AddSingleton<IGenerationService, DalleGenerationService>();
-    // Use local storage for development - can switch to S3 later
-    builder.Services.AddSingleton<IStorageService, LocalStorageService>();
-    builder.Services.AddSingleton<IProductMatcherService, MockProductMatcherService>(); // Real one comes in Week 4
-}
+// Register image generation services
+Console.WriteLine("Using real image generation services");
+builder.Services.AddSingleton<IGenerationService, DalleGenerationService>();
+// Use local storage for development - can switch to S3 later
+builder.Services.AddSingleton<IStorageService, LocalStorageService>();
+builder.Services.AddSingleton<IProductMatcherService, MockProductMatcherService>(); // Real one comes in Week 4
 
 // Register image request repository and orchestrator
 builder.Services.AddSingleton<IImageRequestRepository, SqliteImageRequestRepository>();
@@ -111,7 +92,7 @@ app.UseAuthorization();
 // API endpoints based on the specification in section 6
 app.MapGet("/api/feature-flags", (IFeatureFlagService featureFlagService) =>
 {
-    return new { IsFakeDataMode = featureFlagService.IsFakeDataMode };
+    return new { EnableStripeBilling = featureFlagService.GetFlag("EnableStripeBilling", true) };
 })
 .WithName("GetFeatureFlags");
 

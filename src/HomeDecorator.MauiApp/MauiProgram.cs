@@ -50,11 +50,9 @@ public static class MauiProgram
 		services.AddSingleton<BillingPage>();
 		services.AddSingleton<DesignHistoryPage>();
 		services.AddTransient<NewDesignPage>();
-
 		// Initialize feature flags with defaults
 		var initialFlags = new Dictionary<string, bool>
 		{
-			["IsFakeDataMode"] = true, // Default to ON for development
 			["EnableStripeBilling"] = true, // Enable billing features
 			["EnableCreditLedger"] = true // Enable credit tracking
 		};

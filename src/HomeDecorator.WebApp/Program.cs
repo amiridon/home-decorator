@@ -13,7 +13,7 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 // Initialize feature flags with defaults
 var initialFlags = new Dictionary<string, bool>
 {
-    ["IsFakeDataMode"] = true // Default to ON for development
+    ["EnableStripeBilling"] = true // Enable billing features
 };
 
 // Register core services

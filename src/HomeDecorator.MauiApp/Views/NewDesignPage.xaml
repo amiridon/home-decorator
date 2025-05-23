@@ -54,7 +54,7 @@
                                 </VerticalStackLayout>
                         </Border>
                         <Border x:Name="FakeModeIndicator"
-                                IsVisible="{Binding IsFakeDataMode}"
+                                IsVisible="False"
                                 BackgroundColor="#FFCC00"
                                 Padding="10"
                                 StrokeShape="{RoundRectangle CornerRadius=10}">
