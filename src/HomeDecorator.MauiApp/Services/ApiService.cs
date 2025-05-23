@@ -103,32 +103,48 @@ namespace HomeDecorator.MauiApp.Services
                 Console.WriteLine($"Error getting transaction history: {ex.Message}");
                 return new List<CreditTransactionDto>(); // Return empty list in case of error
             }
-        }
-
-        /// <summary>
-        /// Creates a new image generation request
-        /// </summary>
+        }        /// <summary>
+                 /// Creates a new image generation request
+                 /// </summary>
         public async Task<ImageRequestResponseDto> CreateImageRequestAsync(string originalImageUrl, string prompt)
         {
-            try
+            const int maxRetries = 2;
+            int attempts = 0;
+
+            while (attempts < maxRetries)
             {
-                var request = new CreateImageRequestDto
+                attempts++;
+                try
                 {
-                    OriginalImageUrl = originalImageUrl,
-                    Prompt = prompt
-                };
+                    var request = new CreateImageRequestDto
+                    {
+                        OriginalImageUrl = originalImageUrl,
+                        Prompt = prompt
+                    };
 
-                var response = await _httpClient.PostAsJsonAsync($"{_baseUrl}/api/image-request", request);
-                response.EnsureSuccessStatusCode();
+                    Console.WriteLine($"Sending image request - attempt {attempts}, URL: {originalImageUrl}, Prompt: {prompt}");
+                    var response = await _httpClient.PostAsJsonAsync($"{_baseUrl}/api/image-request", request);
+                    response.EnsureSuccessStatusCode();
 
-                var result = await response.Content.ReadFromJsonAsync<ImageRequestResponseDto>();
-                return result ?? throw new InvalidOperationException("Null response from API");
+                    var result = await response.Content.ReadFromJsonAsync<ImageRequestResponseDto>();
+                    if (result == null)
+                        throw new InvalidOperationException("Null response from API");
+
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error creating image request (attempt {attempts}): {ex.Message}");
+
+                    if (attempts >= maxRetries)
+                        throw;
+
+                    await Task.Delay(1000); // Wait 1 second before retry
+                }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error creating image request: {ex.Message}");
-                throw;
-            }
+
+            // This will never be reached, but compiler needs it
+            throw new InvalidOperationException("Failed to create image request after multiple attempts");
         }
 
         /// <summary>
@@ -167,22 +183,46 @@ namespace HomeDecorator.MauiApp.Services
                 Console.WriteLine($"Error getting image history: {ex.Message}");
                 return new List<ImageRequestResponseDto>();
             }
-        }
-
-        /// <summary>
-        /// Uploads an image and returns the URL
-        /// </summary>
+        }        /// <summary>
+                 /// Uploads an image and returns the URL
+                 /// </summary>
         public async Task<string> UploadImageAsync(Stream imageStream, string fileName)
         {
             try
             {
+                // First, verify if the stream can be read
+                if (!imageStream.CanRead)
+                {
+                    throw new InvalidOperationException("Cannot read from the image stream");
+                }
+
+                // Copy stream to memory to avoid issues with stream being consumed
+                var memoryStream = new MemoryStream();
+                await imageStream.CopyToAsync(memoryStream);
+                memoryStream.Position = 0;
+
                 using var content = new MultipartFormDataContent();
-                using var streamContent = new StreamContent(imageStream);
-                streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+                using var streamContent = new StreamContent(memoryStream);
+
+                // Set appropriate content type based on file extension
+                string contentType = "image/jpeg";
+                if (fileName.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                    contentType = "image/png";
+                else if (fileName.EndsWith(".webp", StringComparison.OrdinalIgnoreCase))
+                    contentType = "image/webp";
+
+                streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
                 content.Add(streamContent, "file", fileName);
 
+                Console.WriteLine($"Uploading image: {fileName}, size: {memoryStream.Length} bytes");
                 var response = await _httpClient.PostAsync($"{_baseUrl}/api/upload-image", content);
-                response.EnsureSuccessStatusCode();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    string errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Upload failed with status {response.StatusCode}: {errorContent}");
+                    throw new HttpRequestException($"Upload failed with status {response.StatusCode}: {errorContent}");
+                }
 
                 var result = await response.Content.ReadFromJsonAsync<UploadResponse>();
                 return result?.ImageUrl ?? throw new InvalidOperationException("No image URL returned");

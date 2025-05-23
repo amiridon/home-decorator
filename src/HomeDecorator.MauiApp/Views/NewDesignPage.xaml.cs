@@ -102,28 +102,49 @@ public partial class NewDesignPage : ContentPage
             }
             else
             {
-                await DisplayAlert("Generation Status",
-                    completedRequest?.ErrorMessage ?? "Generation may still be in progress or failed.",
-                    "OK");
+                // Show error with more context
+                if (completedRequest?.Status == "Failed")
+                {
+                    await DisplayAlert("Generation Failed",
+                        $"Sorry, we couldn't generate your design.\n\nError: {completedRequest.ErrorMessage ?? "Unknown error"}",
+                        "OK");
+                }
+                else
+                {
+                    await DisplayAlert("Generation Status",
+                        "The design is taking longer than expected. You can check the history page later to see if it completed.",
+                        "OK");
+                }
             }
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Error", $"Failed to generate design: {ex.Message}", "OK");
+            // Provide more detailed error information
+            string errorDetails = ex.Message;
+            if (ex.Message.Contains("copying content to stream"))
+            {
+                errorDetails = "Error storing the generated image. This might be due to network issues or permission problems. Please try again with a different image.";
+            }
+
+            await DisplayAlert("Error", $"Failed to generate design: {errorDetails}", "OK");
+            System.Diagnostics.Debug.WriteLine($"Detailed error: {ex}");
         }
         finally
         {
             IsBusy = false;
         }
     }
-
     private async Task<Core.Models.ImageRequestResponseDto?> PollForCompletion(string requestId, int maxAttempts = 30)
     {
+        // Display polling indicator to user
+        await DisplayAlert("Processing", "Your design is being generated. This may take up to a minute.", "OK");
+
         for (int i = 0; i < maxAttempts; i++)
         {
             try
             {
                 var request = await _apiService.GetImageRequestAsync(requestId);
+                System.Diagnostics.Debug.WriteLine($"Poll {i + 1}: Status={request.Status}, Error={request.ErrorMessage}");
 
                 if (request.Status == "Completed" || request.Status == "Failed")
                 {
@@ -135,12 +156,24 @@ public partial class NewDesignPage : ContentPage
             }
             catch (Exception ex)
             {
-                // If polling fails, return null
+                // If polling fails, log the error but continue polling
                 System.Diagnostics.Debug.WriteLine($"Polling failed: {ex.Message}");
-                return null;
+
+                // Only return null after a few failed attempts
+                if (i > 3)
+                {
+                    return null;
+                }
+
+                await Task.Delay(3000); // Wait longer after an error
             }
         }
 
-        return null;
+        // If we've reached max attempts, return a custom response
+        return new Core.Models.ImageRequestResponseDto
+        {
+            Status = "Failed",
+            ErrorMessage = "Timed out waiting for design generation to complete. Please check the history page later."
+        };
     }
 }

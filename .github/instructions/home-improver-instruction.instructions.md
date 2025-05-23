@@ -1,4 +1,3 @@
-
 # SPEC‑4: AI‑Driven Home‑Design Visualization SaaS  
 *Consolidated specification – merges SPEC‑1, SPEC‑2 & SPEC‑3 (May 18 2025)*
 
@@ -198,13 +197,30 @@ CREATE TABLE ImageRequestProducts (
 |-------|----------|-----------|
 | **GitHub** | Push Protection & secret‑scanning on every branch. | Prevent leaked credentials. |
 | **Local Dev** | `dotnet user-secrets` store. | Keeps tokens off disk. |
-| **CI/CD** | GitHub Secrets referenced in workflows; never echoed. | Least‑privilege builds. |
-| **Cloud** | Azure Key Vault via `IConfiguration`; RBAC scoped. | Centralised encryption & rotation. |
+| **CI/CD** | GitHub Secrets referenced in workflows; never echoed. | Least‑privilege builds. |
+| **Cloud** | Azure Key Vault via `IConfiguration`; RBAC scoped. | Centralised encryption & rotation. |
 | **Database** | Only dynamic per‑user tokens, column‑level encryption. | Limits blast‑radius. |
 
 **Prohibited:** secrets in `appsettings.Production.json`, scripts, Dockerfiles, or source control.
 
-Rotation every 90 days minimum; Key Vault & GitHub audit logs reviewed weekly.
+Rotation every 90 days minimum; Key Vault & GitHub audit logs reviewed weekly.
+
+### 7.1 User Secrets Reference
+
+For local development, the following key names should be configured in user secrets:
+
+| Secret Key | Description | Command |
+|------------|-------------|---------|
+| **DallE:ApiKey** | OpenAI API key for DALL·E image generation | `dotnet user-secrets set "DallE:ApiKey" "your-openai-api-key"` |
+| **Stripe:SecretKey** | Stripe secret API key | `dotnet user-secrets set "Stripe:SecretKey" "sk_test_your_key"` |
+| **Stripe:PublishableKey** | Stripe publishable key | `dotnet user-secrets set "Stripe:PublishableKey" "pk_test_your_key"` |
+| **Stripe:WebhookSecret** | Stripe webhook signing secret | `dotnet user-secrets set "Stripe:WebhookSecret" "whsec_your_secret"` |
+| **Storage:LocalPath** | Local storage path for images | `dotnet user-secrets set "Storage:LocalPath" "wwwroot/images"` |
+
+To initialize user secrets for the API project:
+```powershell
+dotnet user-secrets init --project src/HomeDecorator.Api
+```
 
 ---
 
