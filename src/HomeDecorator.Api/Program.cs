@@ -19,6 +19,17 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddAuthentication();
 builder.Services.AddAuthorization();
 
+// Add CORS policy for MAUI app
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("MauiAppPolicy", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
 // Add feature flags
 var featureFlags = new Dictionary<string, bool>();
 builder.Configuration.GetSection("FeatureFlags").Bind(featureFlags);
@@ -86,6 +97,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// Enable CORS
+app.UseCors("MauiAppPolicy");
 
 // Serve static files (for locally stored images)
 app.UseStaticFiles();

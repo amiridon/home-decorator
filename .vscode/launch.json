@@ -1,0 +1,51 @@
+{
+    "version": "0.2.0",
+    "compounds": [
+        {
+            "name": "API + MAUI",
+            "configurations": ["API", "MAUI"],
+            "stopAll": true
+        }
+    ],
+    "configurations": [
+        {
+            "name": "API",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-api",
+            "program": "${workspaceFolder}/src/HomeDecorator.Api/bin/Debug/net9.0/HomeDecorator.Api.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/HomeDecorator.Api",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)",
+                "uriFormat": "%s/swagger"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "https://localhost:5001;http://localhost:5000"
+            },
+            "sourceFileMap": {
+                "/Views": "${workspaceFolder}/Views"
+            }
+        },
+        {
+            "name": "MAUI",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-maui",
+            "program": "dotnet",
+            "args": [
+                "run",
+                "--project",
+                "${workspaceFolder}/src/HomeDecorator.MauiApp/HomeDecorator.MauiApp.csproj",
+                "--framework",
+                "net9.0-windows10.0.19041.0" // Change this based on your target platform
+            ],
+            "cwd": "${workspaceFolder}/src/HomeDecorator.MauiApp",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        }
+    ]
+}

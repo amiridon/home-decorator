@@ -20,9 +20,22 @@ public static class MauiProgram
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
 			});
-
 		// Register services
 		RegisterServices(builder.Services);
+
+		// Configure HTTP client handler for development
+		builder.Services.AddTransient<HttpMessageHandler>(_ =>
+		{
+#if DEBUG
+			// In debug mode, allow self-signed certificates for local development
+			return new HttpClientHandler
+			{
+				ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
+			};
+#else
+			return new HttpClientHandler();
+#endif
+		});
 
 #if DEBUG
 		builder.Logging.AddDebug();

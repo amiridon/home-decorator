@@ -1,0 +1,14 @@
+{
+    "dotnet.defaultSolution": "HomeDecorator.sln",
+    "[csharp]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "ms-dotnettools.csharp"
+    },
+    "editor.codeActionsOnSave": {
+        "source.fixAll": true
+    },
+    "files.exclude": {
+        "**/bin": true,
+        "**/obj": true
+    }
+}
