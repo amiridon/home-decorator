@@ -159,44 +159,6 @@ app.MapPost("/api/feature-flags/update", async (IConfiguration configuration, Ht
 .AllowAnonymous()
 .WithName("UpdateFeatureFlag");
 
-app.MapPost("/api/feature-flags/update", async (HttpRequest req, IConfiguration configuration) =>
-{
-    string flagName = req.Query["flag"];
-    bool value = bool.Parse(req.Query["value"]);
-
-    if (string.IsNullOrEmpty(flagName))
-    {
-        return Results.BadRequest("Flag name is required");
-    }
-
-    try
-    {
-        // Update the appsettings.json file
-        string jsonPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-        string json = await File.ReadAllTextAsync(jsonPath);
-
-        // Create a simple way to update the value using string replacement
-        string currentSetting = $"\"{flagName}\": {(!value).ToString().ToLowerInvariant()}";
-        string newSetting = $"\"{flagName}\": {value.ToString().ToLowerInvariant()}";
-
-        if (json.Contains(currentSetting))
-        {
-            json = json.Replace(currentSetting, newSetting);
-            await File.WriteAllTextAsync(jsonPath, json);
-            return Results.Ok(new { success = true, message = $"Feature flag {flagName} updated to {value}" });
-        }
-        else
-        {
-            return Results.BadRequest(new { success = false, message = $"Could not find feature flag {flagName} with value {!value}" });
-        }
-    }
-    catch (Exception ex)
-    {
-        return Results.Problem(ex.Message);
-    }
-})
-.WithName("UpdateFeatureFlag");
-
 // Define the required API endpoints from section 6
 app.MapPost("/api/auth/login", () =>
 {
