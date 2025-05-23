@@ -169,6 +169,31 @@ namespace HomeDecorator.MauiApp.Services
             }
         }
 
+        /// <summary>
+        /// Uploads an image and returns the URL
+        /// </summary>
+        public async Task<string> UploadImageAsync(Stream imageStream, string fileName)
+        {
+            try
+            {
+                using var content = new MultipartFormDataContent();
+                using var streamContent = new StreamContent(imageStream);
+                streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+                content.Add(streamContent, "file", fileName);
+
+                var response = await _httpClient.PostAsync($"{_baseUrl}/api/upload-image", content);
+                response.EnsureSuccessStatusCode();
+
+                var result = await response.Content.ReadFromJsonAsync<UploadResponse>();
+                return result?.ImageUrl ?? throw new InvalidOperationException("No image URL returned");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error uploading image: {ex.Message}");
+                throw;
+            }
+        }
+
         // Response types
         private class CheckoutResponse
         {
@@ -183,6 +208,11 @@ namespace HomeDecorator.MauiApp.Services
         private class CreditBalanceResponse
         {
             public int Credits { get; set; }
+        }
+
+        private class UploadResponse
+        {
+            public string ImageUrl { get; set; } = string.Empty;
         }
     }
 }

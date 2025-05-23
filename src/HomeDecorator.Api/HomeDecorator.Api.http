@@ -4,3 +4,26 @@ GET {{HomeDecorator.Api_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+// Test image request generation
+POST {{HomeDecorator.Api_HostAddress}}/api/image-request
+Content-Type: application/json
+
+{
+  "prompt": "Modern living room with blue accents",
+  "originalImageUrl": "https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg"
+}
+
+###
+
+// Test DALL-E directly (helpful for troubleshooting)
+GET {{HomeDecorator.Api_HostAddress}}/api/test-dalle
+Accept: application/json
+
+###
+
+// Get image request by ID
+GET {{HomeDecorator.Api_HostAddress}}/api/image-request/1
+Accept: application/json
+
+###

@@ -8,6 +8,7 @@ public partial class NewDesignPage : ContentPage
     private readonly IFeatureFlagService _featureFlagService;
     private readonly IGenerationService _generationService;
     private readonly ApiService _apiService;
+    private FileResult? _selectedPhoto;
 
     public NewDesignPage(IFeatureFlagService featureFlagService, IGenerationService generationService, ApiService apiService)
     {
@@ -16,7 +17,6 @@ public partial class NewDesignPage : ContentPage
         _generationService = generationService;
         _apiService = apiService;
     }
-
     private async void OnTakePhotoClicked(object sender, EventArgs e)
     {
         try
@@ -24,6 +24,7 @@ public partial class NewDesignPage : ContentPage
             var photo = await MediaPicker.CapturePhotoAsync();
             if (photo != null)
             {
+                _selectedPhoto = photo;
                 var stream = await photo.OpenReadAsync();
                 SelectedImage.Source = ImageSource.FromStream(() => stream);
             }
@@ -33,7 +34,6 @@ public partial class NewDesignPage : ContentPage
             await DisplayAlert("Error", $"Failed to take photo: {ex.Message}", "OK");
         }
     }
-
     private async void OnChoosePhotoClicked(object sender, EventArgs e)
     {
         try
@@ -41,6 +41,7 @@ public partial class NewDesignPage : ContentPage
             var photo = await MediaPicker.PickPhotoAsync();
             if (photo != null)
             {
+                _selectedPhoto = photo;
                 var stream = await photo.OpenReadAsync();
                 SelectedImage.Source = ImageSource.FromStream(() => stream);
             }
@@ -50,7 +51,6 @@ public partial class NewDesignPage : ContentPage
             await DisplayAlert("Error", $"Failed to pick photo: {ex.Message}", "OK");
         }
     }
-
     private async void OnGenerateDesignClicked(object sender, EventArgs e)
     {
         if (string.IsNullOrWhiteSpace(PromptEditor.Text))
@@ -59,12 +59,22 @@ public partial class NewDesignPage : ContentPage
             return;
         }
 
+        if (_selectedPhoto == null)
+        {
+            await DisplayAlert("Missing Information", "Please select or take a photo first.", "OK");
+            return;
+        }
+
         IsBusy = true;
 
         try
         {
-            // For now, use a placeholder image URL since we're selecting from device
-            string imageUrl = "https://via.placeholder.com/400x300?text=Original+Room";
+            // Upload the selected image first
+            string imageUrl;
+            using (var stream = await _selectedPhoto.OpenReadAsync())
+            {
+                imageUrl = await _apiService.UploadImageAsync(stream, _selectedPhoto.FileName);
+            }
 
             // Create the image generation request
             var response = await _apiService.CreateImageRequestAsync(imageUrl, PromptEditor.Text);

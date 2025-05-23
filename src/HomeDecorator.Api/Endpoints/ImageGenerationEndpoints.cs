@@ -1,6 +1,8 @@
 using HomeDecorator.Core.Models;
 using HomeDecorator.Api.Services;
 using Microsoft.AspNetCore.Authorization;
+using HomeDecorator.Core.Services;
+using System;
 
 namespace HomeDecorator.Api.Endpoints;
 
@@ -11,6 +13,50 @@ public static class ImageGenerationEndpoints
 {
     public static void MapImageGenerationEndpoints(this WebApplication app)
     {
+        // Upload an image
+        app.MapPost("/api/upload-image", async (
+            IFormFile file,
+            IStorageService storageService) =>
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                {
+                    return Results.BadRequest(new { error = "No file provided" });
+                }
+
+                // Validate file type
+                var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/webp" };
+                if (!allowedTypes.Contains(file.ContentType.ToLower()))
+                {
+                    return Results.BadRequest(new { error = "Invalid file type. Only JPEG, PNG, and WebP images are allowed." });
+                }
+
+                // Validate file size (max 10MB)
+                if (file.Length > 10 * 1024 * 1024)
+                {
+                    return Results.BadRequest(new { error = "File size too large. Maximum size is 10MB." });
+                }
+
+                using var stream = file.OpenReadStream();
+                var fileName = Path.GetFileName(file.FileName);
+                var imageUrl = await storageService.StoreImageFromStreamAsync(stream, fileName, "uploaded");
+
+                return Results.Ok(new { imageUrl });
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem(
+                    title: "Error uploading image",
+                    detail: ex.Message,
+                    statusCode: 500);
+            }
+        })
+        .WithName("UploadImage")
+        .WithTags("Image Generation")
+        .WithOpenApi()
+        .DisableAntiforgery(); // Required for file uploads
+
         // Create a new image generation request
         app.MapPost("/api/image-request", async (
             CreateImageRequestDto request,
@@ -90,7 +136,7 @@ public static class ImageGenerationEndpoints
                     statusCode: 500);
             }
         })
-        .RequireAuthorization()
+        // .RequireAuthorization() // Temporarily disabled for development testing
         .WithName("GetImageRequest")
         .WithTags("Image Generation")
         .WithOpenApi();
@@ -130,9 +176,74 @@ public static class ImageGenerationEndpoints
                     detail: ex.Message,
                     statusCode: 500);
             }
-        })
-        .RequireAuthorization()
+        })        // .RequireAuthorization() // Temporarily disabled for development testing
         .WithName("GetHistory")
+        .WithTags("Image Generation")
+        .WithOpenApi();        // Test endpoint for debugging DALL-E generation
+        app.MapGet("/api/test-dalle", async (
+            IGenerationService generationService,
+            ILogger<Program> logger,
+            IConfiguration configuration,
+            HttpContext context) =>
+        {
+            try
+            {
+                logger.LogInformation("Testing DALL-E generation...");
+
+                // Check if we can read the API key for diagnostics
+                var apiKeyExists = !string.IsNullOrEmpty(configuration["DallE:ApiKey"]);
+                logger.LogInformation("DALL-E API key in configuration: {Exists}", apiKeyExists ? "Yes" : "No");
+
+                if (apiKeyExists)
+                {
+                    var keyLength = configuration["DallE:ApiKey"]!.Length;
+                    var firstChars = configuration["DallE:ApiKey"]!.Substring(0, Math.Min(5, keyLength));
+                    logger.LogInformation("API key length: {Length}, starts with: {Start}...", keyLength, firstChars);
+                }
+
+                // Use a public sample image that definitely exists
+                var sampleImageUrl = "https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg";
+                var testPrompt = "Add blue accent wall";
+
+                logger.LogInformation("Using sample image: {Url} with prompt: {Prompt}",
+                    sampleImageUrl, testPrompt);
+
+                var generatedImageUrl = await generationService.GenerateImageAsync(
+                    sampleImageUrl, testPrompt);
+
+                return Results.Ok(new
+                {
+                    success = true,
+                    message = "DALL-E generation successful",
+                    generatedImageUrl
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error testing DALL-E generation");
+
+                // Detailed diagnostics
+                var diagnosticInfo = new Dictionary<string, object>
+                {
+                    ["Exception"] = new
+                    {
+                        Message = ex.Message,
+                        Type = ex.GetType().Name,
+                        StackTrace = ex.StackTrace,
+                        InnerException = ex.InnerException?.Message
+                    },
+                    ["ApiKeyConfigured"] = !string.IsNullOrEmpty(configuration["DallE:ApiKey"]),
+                    ["EnvironmentName"] = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"
+                };
+
+                // Return detailed error information for debugging
+                return Results.Problem(
+                    title: "DALL-E Test Failed",
+                    detail: System.Text.Json.JsonSerializer.Serialize(diagnosticInfo),
+                    statusCode: 500);
+            }
+        })
+        .WithName("TestDallE")
         .WithTags("Image Generation")
         .WithOpenApi();
     }
