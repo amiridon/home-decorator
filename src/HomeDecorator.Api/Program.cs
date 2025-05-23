@@ -115,6 +115,88 @@ app.MapGet("/api/feature-flags", (IFeatureFlagService featureFlagService) =>
 })
 .WithName("GetFeatureFlags");
 
+app.MapPost("/api/feature-flags/update", async (IConfiguration configuration, HttpContext context) =>
+{
+    string? flagName = context.Request.Query["flag"].ToString();
+    string? valueStr = context.Request.Query["value"].ToString();
+
+    if (string.IsNullOrEmpty(flagName) || string.IsNullOrEmpty(valueStr))
+    {
+        return Results.BadRequest("Flag name and value are required");
+    }
+
+    if (!bool.TryParse(valueStr, out bool value))
+    {
+        return Results.BadRequest("Value must be a boolean (true/false)");
+    }
+
+    try
+    {
+        // Update the appsettings.json file
+        string jsonPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        string json = await File.ReadAllTextAsync(jsonPath);
+
+        // Create a simple way to update the value using string replacement
+        string currentSetting = $"\"{flagName}\": {(!value).ToString().ToLowerInvariant()}";
+        string newSetting = $"\"{flagName}\": {value.ToString().ToLowerInvariant()}";
+
+        if (json.Contains(currentSetting))
+        {
+            json = json.Replace(currentSetting, newSetting);
+            await File.WriteAllTextAsync(jsonPath, json);
+            return Results.Ok(new { success = true, message = $"Feature flag {flagName} updated to {value}. Please restart the API for changes to take effect." });
+        }
+        else
+        {
+            return Results.BadRequest(new { success = false, message = $"Could not find feature flag {flagName} with value {!value}" });
+        }
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+})
+.AllowAnonymous()
+.WithName("UpdateFeatureFlag");
+
+app.MapPost("/api/feature-flags/update", async (HttpRequest req, IConfiguration configuration) =>
+{
+    string flagName = req.Query["flag"];
+    bool value = bool.Parse(req.Query["value"]);
+
+    if (string.IsNullOrEmpty(flagName))
+    {
+        return Results.BadRequest("Flag name is required");
+    }
+
+    try
+    {
+        // Update the appsettings.json file
+        string jsonPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        string json = await File.ReadAllTextAsync(jsonPath);
+
+        // Create a simple way to update the value using string replacement
+        string currentSetting = $"\"{flagName}\": {(!value).ToString().ToLowerInvariant()}";
+        string newSetting = $"\"{flagName}\": {value.ToString().ToLowerInvariant()}";
+
+        if (json.Contains(currentSetting))
+        {
+            json = json.Replace(currentSetting, newSetting);
+            await File.WriteAllTextAsync(jsonPath, json);
+            return Results.Ok(new { success = true, message = $"Feature flag {flagName} updated to {value}" });
+        }
+        else
+        {
+            return Results.BadRequest(new { success = false, message = $"Could not find feature flag {flagName} with value {!value}" });
+        }
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+})
+.WithName("UpdateFeatureFlag");
+
 // Define the required API endpoints from section 6
 app.MapPost("/api/auth/login", () =>
 {

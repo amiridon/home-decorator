@@ -1,4 +1,5 @@
 using System;
+using System.Net.Http;
 using HomeDecorator.Core.Services;
 
 namespace HomeDecorator.MauiApp.Views;
@@ -15,17 +16,56 @@ public partial class SettingsPage : ContentPage
         // Initialize the switch based on the current flag value
         FakeDataSwitch.IsToggled = _featureFlagService.IsFakeDataMode;
     }
-
     private async void OnFakeDataToggled(object sender, ToggledEventArgs e)
     {
         bool enabled = e.Value;
 
-        // In a real implementation, we would persist this change
-        // For now, just show a message indicating the change
-        await DisplayAlert("Feature Flag Changed",
-            $"Fake Data Mode is now {(enabled ? "enabled" : "disabled")}.\n\n" +
-            "In a production app, this setting would be persisted.",
-            "OK");
+        try
+        {
+            // Call the API to update the feature flag
+            var httpClient = new HttpClient();
+            string baseUrl = DeviceInfo.Platform == DevicePlatform.Android
+                ? "https://10.0.2.2:5184" // Android emulator uses this IP for localhost
+                : "https://localhost:5184";
+
+            // We need to handle SSL certificate issues in development
+            var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = (_, _, _, _) => true // Accept all certificates
+            };
+            var client = new HttpClient(handler);
+
+            var response = await client.PostAsync(
+                $"{baseUrl}/api/feature-flags/update?flag=IsFakeDataMode&value={enabled}",
+                null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                await DisplayAlert("Feature Flag Changed",
+                    $"Fake Data Mode is now {(enabled ? "enabled" : "disabled")}. " +
+                    $"Please restart the application for changes to take effect.",
+                    "OK");
+            }
+            else
+            {
+                // If the API call fails, revert the toggle
+                FakeDataSwitch.IsToggled = !enabled;
+                string errorMessage = await response.Content.ReadAsStringAsync();
+                await DisplayAlert("Error",
+                    $"Failed to update feature flag: {errorMessage}. " +
+                    "Please ensure the API is running and try again.",
+                    "OK");
+            }
+        }
+        catch (Exception ex)
+        {
+            // If an exception occurs, revert the toggle
+            FakeDataSwitch.IsToggled = !enabled;
+            await DisplayAlert("Error",
+                $"An error occurred: {ex.Message}. " +
+                "Please ensure the API is running and try again.",
+                "OK");
+        }
     }
 
     private async void OnPrivacyPolicyClicked(object sender, EventArgs e)
