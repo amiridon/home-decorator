@@ -14,9 +14,14 @@ namespace HomeDecorator.MauiApp.Services
     public class ApiService
     {
         private readonly HttpClient _httpClient;
-        private readonly string _baseUrl; public ApiService(HttpMessageHandler? handler = null)
+        public readonly string _baseUrl; // Made public to access from other classes
+
+        public ApiService(HttpMessageHandler? handler = null)
         {
             _httpClient = handler != null ? new HttpClient(handler) : new HttpClient();
+
+            // Set longer timeout to allow for DALL-E processing
+            _httpClient.Timeout = TimeSpan.FromMinutes(2);
 
             // In a real app, this would come from configuration
             _baseUrl = "https://your-api-url.com";
@@ -24,8 +29,10 @@ namespace HomeDecorator.MauiApp.Services
 #if DEBUG
             // For local development use localhost - using HTTP since API runs on HTTP in development
             _baseUrl = DeviceInfo.Platform == DevicePlatform.Android
-                ? "http://10.0.2.2:5184" // Android emulator uses this IP for localhost
-                : "http://localhost:5184";
+                ? "http://10.0.2.2:5002" // Android emulator uses this IP for localhost
+                : "http://localhost:5002";
+
+            Console.WriteLine($"API base URL set to: {_baseUrl}");
 #endif
         }
 

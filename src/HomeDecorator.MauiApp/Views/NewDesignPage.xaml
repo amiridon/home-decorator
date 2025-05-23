@@ -63,6 +63,20 @@
                                                FontSize="20"
                                                FontAttributes="Bold"/>
 
+                                        <!-- Loading indicator -->
+                                        <StackLayout x:Name="LoadingIndicator"
+                                                     IsVisible="False"
+                                                     HorizontalOptions="Center"
+                                                     Spacing="10">
+                                                <ActivityIndicator IsRunning="True"
+                                                                   Color="#34C759"
+                                                                   HeightRequest="50"
+                                                                   WidthRequest="50"/>
+                                                <Label Text="Generating your design..."
+                                                       TextColor="#34C759"
+                                                       FontAttributes="Bold"/>
+                                        </StackLayout>
+
                                         <Image x:Name="GeneratedImage"
                                                IsVisible="False"
                                                HeightRequest="300"

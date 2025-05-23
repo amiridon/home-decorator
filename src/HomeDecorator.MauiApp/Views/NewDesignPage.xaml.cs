@@ -66,14 +66,26 @@ public partial class NewDesignPage : ContentPage
         }
 
         IsBusy = true;
+        LoadingIndicator.IsVisible = true;
+        GeneratedImage.IsVisible = false;
 
         try
         {
             // Upload the selected image first
             string imageUrl;
-            using (var stream = await _selectedPhoto.OpenReadAsync())
+            try
             {
-                imageUrl = await _apiService.UploadImageAsync(stream, _selectedPhoto.FileName);
+                using (var stream = await _selectedPhoto.OpenReadAsync())
+                {
+                    Console.WriteLine($"Uploading image: {_selectedPhoto.FileName}, size: {stream.Length} bytes");
+                    imageUrl = await _apiService.UploadImageAsync(stream, _selectedPhoto.FileName);
+                    Console.WriteLine($"Successfully uploaded image, received URL: {imageUrl}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Image upload failed: {ex.Message}");
+                throw new Exception($"Failed to upload image: {ex.Message}", ex);
             }
 
             // Create the image generation request
@@ -88,12 +100,41 @@ public partial class NewDesignPage : ContentPage
             var completedRequest = await PollForCompletion(response.Id);
 
             if (completedRequest != null && completedRequest.Status == "Completed")
-            {
-                // Display the generated image
+            {                // Display the generated image
                 if (!string.IsNullOrEmpty(completedRequest.GeneratedImageUrl))
                 {
-                    GeneratedImage.Source = completedRequest.GeneratedImageUrl;
-                    GeneratedImage.IsVisible = true;
+                    try
+                    {
+                        // Properly create an ImageSource from URL
+                        string fullUrl = completedRequest.GeneratedImageUrl;
+
+                        // If the URL is relative, prepend the base API URL
+                        if (completedRequest.GeneratedImageUrl.StartsWith("/"))
+                        {
+                            fullUrl = $"{_apiService._baseUrl}{completedRequest.GeneratedImageUrl}";
+                            Console.WriteLine($"Using full URL: {fullUrl}");
+                        }
+
+                        // Update UI on main thread and use try-catch for robust error handling
+                        MainThread.BeginInvokeOnMainThread(() =>
+                        {
+                            try
+                            {
+                                GeneratedImage.Source = ImageSource.FromUri(new Uri(fullUrl));
+                                GeneratedImage.IsVisible = true;
+                                Console.WriteLine($"Successfully set image source to URL: {fullUrl}");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"UI thread error setting image: {ex.Message}");
+                            }
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error setting image source: {ex.Message}");
+                        // Continue execution to show the completed message even if image loading fails
+                    }
                 }
 
                 await DisplayAlert("Design Completed",
@@ -132,10 +173,14 @@ public partial class NewDesignPage : ContentPage
         finally
         {
             IsBusy = false;
+            LoadingIndicator.IsVisible = false;
         }
     }
     private async Task<Core.Models.ImageRequestResponseDto?> PollForCompletion(string requestId, int maxAttempts = 30)
     {
+        // Show loading indicator during the polling process
+        LoadingIndicator.IsVisible = true;
+
         // Display polling indicator to user
         await DisplayAlert("Processing", "Your design is being generated. This may take up to a minute.", "OK");
 
