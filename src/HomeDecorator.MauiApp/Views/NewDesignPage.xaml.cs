@@ -1,4 +1,5 @@
 using HomeDecorator.Core.Services;
+using HomeDecorator.MauiApp.Services;
 
 namespace HomeDecorator.MauiApp.Views;
 
@@ -6,12 +7,14 @@ public partial class NewDesignPage : ContentPage
 {
     private readonly IFeatureFlagService _featureFlagService;
     private readonly IGenerationService _generationService;
+    private readonly ApiService _apiService;
 
-    public NewDesignPage(IFeatureFlagService featureFlagService, IGenerationService generationService)
+    public NewDesignPage(IFeatureFlagService featureFlagService, IGenerationService generationService, ApiService apiService)
     {
         InitializeComponent();
         _featureFlagService = featureFlagService;
         _generationService = generationService;
+        _apiService = apiService;
 
         // Set the binding context for the fake data mode indicator
         BindingContext = new
@@ -70,9 +73,7 @@ public partial class NewDesignPage : ContentPage
         {
             await DisplayAlert("Error", $"Failed to pick photo: {ex.Message}", "OK");
         }
-    }
-
-    private async void OnGenerateDesignClicked(object sender, EventArgs e)
+    }    private async void OnGenerateDesignClicked(object sender, EventArgs e)
     {
         if (string.IsNullOrWhiteSpace(PromptEditor.Text))
         {
@@ -85,16 +86,45 @@ public partial class NewDesignPage : ContentPage
 
         try
         {
-            // Mock image URL for testing
-            string imageUrl = "https://via.placeholder.com/400x300?text=Original+Room";
+            if (_featureFlagService.IsFakeDataMode)
+            {
+                // In fake mode, use the local generation service
+                string imageUrl = "https://via.placeholder.com/400x300?text=Original+Room";
+                string generatedImageUrl = await _generationService.GenerateImageAsync(imageUrl, PromptEditor.Text);
 
-            // Call the generation service (will be the mock implementation in fake mode)
-            string generatedImageUrl = await _generationService.GenerateImageAsync(imageUrl, PromptEditor.Text);
-
-            // Navigate to a result page (we'll simulate this with an alert for now)
-            await DisplayAlert("Design Generated",
-                $"Your design has been generated!\n\nPrompt: {PromptEditor.Text}\n\nImage URL: {generatedImageUrl}\n\nFake Mode: {_featureFlagService.IsFakeDataMode}",
-                "OK");
+                await DisplayAlert("Design Generated (Fake Mode)",
+                    $"Your design has been generated!\n\nPrompt: {PromptEditor.Text}\n\nImage URL: {generatedImageUrl}",
+                    "OK");
+            }
+            else
+            {
+                // In real mode, use the API service
+                string imageUrl = "https://via.placeholder.com/400x300?text=Original+Room";
+                
+                // Create the image generation request
+                var response = await _apiService.CreateImageRequestAsync(imageUrl, PromptEditor.Text);
+                
+                // Show initial response
+                await DisplayAlert("Generation Started",
+                    $"Your design generation has been started!\n\nRequest ID: {response.Id}\n\nStatus: {response.Status}",
+                    "OK");
+                
+                // Poll for completion (in a real app, you might use SignalR or WebSockets)
+                var completedRequest = await PollForCompletion(response.Id);
+                
+                if (completedRequest != null && completedRequest.Status == "Completed")
+                {
+                    await DisplayAlert("Design Completed",
+                        $"Your design is ready!\n\nGenerated Image: {completedRequest.GeneratedImageUrl}",
+                        "OK");
+                }
+                else
+                {
+                    await DisplayAlert("Generation Status",
+                        $"Status: {completedRequest?.Status ?? "Unknown"}\n\nError: {completedRequest?.ErrorMessage ?? "None"}",
+                        "OK");
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -104,5 +134,28 @@ public partial class NewDesignPage : ContentPage
         {
             IsBusy = false;
         }
+    }
+
+    private async Task<HomeDecorator.Core.Models.ImageRequestResponseDto?> PollForCompletion(string requestId)
+    {
+        // Simple polling mechanism - in production, use SignalR or WebSockets
+        for (int i = 0; i < 30; i++) // Poll for up to 30 seconds
+        {
+            try
+            {
+                var request = await _apiService.GetImageRequestAsync(requestId);
+                if (request.Status == "Completed" || request.Status == "Failed")
+                {
+                    return request;
+                }
+                await Task.Delay(1000); // Wait 1 second before next poll
+            }
+            catch
+            {
+                // Continue polling even if individual requests fail
+                await Task.Delay(1000);
+            }
+        }
+        return null; // Timeout
     }
 }

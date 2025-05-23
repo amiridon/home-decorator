@@ -20,4 +20,12 @@ public interface IGenerationService
     /// <param name="requestId">The ID of the generation request</param>
     /// <returns>The status of the generation</returns>
     Task<string> GetGenerationStatusAsync(string requestId);
+
+    /// <summary>
+    /// Gets recent generations for a user
+    /// </summary>
+    /// <param name="userId">The user ID</param>
+    /// <param name="count">Number of recent generations to return</param>
+    /// <returns>List of recent generation URLs</returns>
+    Task<List<string>> GetRecentGenerationsAsync(string userId, int count = 5);
 }

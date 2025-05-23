@@ -42,6 +42,30 @@ else
     builder.Services.AddSingleton<IBillingService, StripeService>();
 }
 
+// Register image generation services based on fake data mode
+if (isFakeDataMode)
+{
+    Console.WriteLine("Using mock image generation services (fake data mode)");
+    builder.Services.AddSingleton<IGenerationService, MockGenerationService>();
+    builder.Services.AddSingleton<IStorageService, MockStorageService>();
+    builder.Services.AddSingleton<IProductMatcherService, MockProductMatcherService>();
+}
+else
+{
+    Console.WriteLine("Using real image generation services");
+    builder.Services.AddSingleton<IGenerationService, DalleGenerationService>();
+    // Use local storage for development - can switch to S3 later
+    builder.Services.AddSingleton<IStorageService, LocalStorageService>();
+    builder.Services.AddSingleton<IProductMatcherService, MockProductMatcherService>(); // Real one comes in Week 4
+}
+
+// Register image request repository and orchestrator
+builder.Services.AddSingleton<IImageRequestRepository, SqliteImageRequestRepository>();
+builder.Services.AddSingleton<ImageGenerationOrchestrator>();
+
+// Register HttpClient for services that need it
+builder.Services.AddHttpClient();
+
 // Configure Azure Key Vault if enabled
 if (builder.Configuration.GetValue<bool>("KeyVault:Enabled"))
 {
@@ -62,6 +86,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// Serve static files (for locally stored images)
+app.UseStaticFiles();
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
@@ -84,26 +111,8 @@ app.MapPost("/api/auth/login", () =>
 // Map billing endpoints from the BillingEndpoints class
 app.MapBillingEndpoints();
 
-app.MapPost("/api/image-request", () =>
-{
-    return TypedResults.StatusCode(StatusCodes.Status501NotImplemented);
-})
-.RequireAuthorization()
-.WithName("CreateImageRequest");
-
-app.MapGet("/api/image-request/{id}", (string id) =>
-{
-    return TypedResults.StatusCode(StatusCodes.Status501NotImplemented);
-})
-.RequireAuthorization()
-.WithName("GetImageRequest");
-
-app.MapGet("/api/history", () =>
-{
-    return TypedResults.StatusCode(StatusCodes.Status501NotImplemented);
-})
-.RequireAuthorization()
-.WithName("GetHistory");
+// Map image generation endpoints
+app.MapImageGenerationEndpoints();
 
 app.MapGet("/api/products/{id}", (string id) =>
 {

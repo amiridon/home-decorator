@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using HomeDecorator.MauiApp.Models;
+using HomeDecorator.Core.Models;
 
 namespace HomeDecorator.MauiApp.Services
 {
@@ -30,9 +31,7 @@ namespace HomeDecorator.MauiApp.Services
                 ? "http://10.0.2.2:5000" // Android emulator uses this IP for localhost
                 : "http://localhost:5000";
 #endif
-        }
-
-        /// <summary>
+        }        /// <summary>
         /// Gets checkout URL for a credit pack
         /// </summary>
         public async Task<string> GetCheckoutUrlAsync(string userId, string packId)
@@ -42,7 +41,7 @@ namespace HomeDecorator.MauiApp.Services
                 var response = await _httpClient.GetFromJsonAsync<CheckoutResponse>(
                     $"{_baseUrl}/api/billing/checkout/{packId}?userId={userId}");
 
-                return response?.Url;
+                return response?.Url ?? throw new InvalidOperationException("No checkout URL returned");
             }
             catch (Exception ex)
             {
@@ -61,7 +60,7 @@ namespace HomeDecorator.MauiApp.Services
                 var response = await _httpClient.GetFromJsonAsync<PortalResponse>(
                     $"{_baseUrl}/api/billing/portal?userId={userId}");
 
-                return response?.Url;
+                return response?.Url ?? throw new InvalidOperationException("No portal URL returned");
             }
             catch (Exception ex)
             {
@@ -86,9 +85,7 @@ namespace HomeDecorator.MauiApp.Services
                 Console.WriteLine($"Error getting credit balance: {ex.Message}");
                 return 0; // Default to 0 in case of error
             }
-        }
-
-        /// <summary>
+        }        /// <summary>
         /// Gets credit transaction history
         /// </summary>
         public async Task<List<CreditTransactionDto>> GetCreditTransactionHistoryAsync(string userId, int count = 10)
@@ -107,15 +104,77 @@ namespace HomeDecorator.MauiApp.Services
             }
         }
 
-        // Response types
+        /// <summary>
+        /// Creates a new image generation request
+        /// </summary>
+        public async Task<ImageRequestResponseDto> CreateImageRequestAsync(string originalImageUrl, string prompt)
+        {
+            try
+            {
+                var request = new CreateImageRequestDto
+                {
+                    OriginalImageUrl = originalImageUrl,
+                    Prompt = prompt
+                };
+
+                var response = await _httpClient.PostAsJsonAsync($"{_baseUrl}/api/image-request", request);
+                response.EnsureSuccessStatusCode();
+
+                var result = await response.Content.ReadFromJsonAsync<ImageRequestResponseDto>();
+                return result ?? throw new InvalidOperationException("Null response from API");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating image request: {ex.Message}");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Gets an image generation request by ID
+        /// </summary>
+        public async Task<ImageRequestResponseDto> GetImageRequestAsync(string requestId)
+        {
+            try
+            {
+                var response = await _httpClient.GetFromJsonAsync<ImageRequestResponseDto>(
+                    $"{_baseUrl}/api/image-request/{requestId}");
+
+                return response ?? throw new InvalidOperationException("Request not found");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting image request: {ex.Message}");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Gets user's image generation history
+        /// </summary>
+        public async Task<List<ImageRequestResponseDto>> GetImageHistoryAsync(int limit = 10)
+        {
+            try
+            {
+                var response = await _httpClient.GetFromJsonAsync<List<ImageRequestResponseDto>>(
+                    $"{_baseUrl}/api/history?limit={limit}");
+
+                return response ?? new List<ImageRequestResponseDto>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting image history: {ex.Message}");
+                return new List<ImageRequestResponseDto>();
+            }
+        }        // Response types
         private class CheckoutResponse
         {
-            public string Url { get; set; }
+            public string Url { get; set; } = string.Empty;
         }
 
         private class PortalResponse
         {
-            public string Url { get; set; }
+            public string Url { get; set; } = string.Empty;
         }
 
         private class CreditBalanceResponse
