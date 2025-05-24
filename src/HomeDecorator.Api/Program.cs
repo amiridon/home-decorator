@@ -2,6 +2,7 @@ using HomeDecorator.Api.Endpoints;
 using HomeDecorator.Api.Services;
 using HomeDecorator.Core.Services;
 using Microsoft.AspNetCore.Http.Json;
+using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Swashbuckle.AspNetCore.Swagger;
 using System;
@@ -50,6 +51,9 @@ builder.Services.AddSingleton<IGenerationService, DalleGenerationService>();
 // Use local storage for development - can switch to S3 later
 builder.Services.AddSingleton<IStorageService, LocalStorageService>();
 builder.Services.AddSingleton<IProductMatcherService, MockProductMatcherService>(); // Real one comes in Week 4
+
+// Register test service for DALL-E 2 variations
+builder.Services.AddSingleton<TestDalleVariationService>();
 
 // Register image request repository and orchestrator
 builder.Services.AddSingleton<IImageRequestRepository, SqliteImageRequestRepository>();
@@ -152,8 +156,27 @@ app.MapPost("/api/auth/login", () =>
 // Map billing endpoints from the BillingEndpoints class
 app.MapBillingEndpoints();
 
-// Map image generation endpoints
+// Image generation endpoints
 app.MapImageGenerationEndpoints();
+
+// Test DALL-E 2 image variations endpoint (for development only)
+app.MapGet("/api/test-dalle-variations", async (
+    TestDalleVariationService testService,
+    [FromQuery] string imageUrl) =>
+{
+    try
+    {
+        // Run the test with the provided image URL
+        await testService.TestVariationGenerationAsync(imageUrl);
+        return Results.Ok(new { success = true, message = "Test completed successfully" });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, error = ex.Message });
+    }
+})
+.WithName("TestDalleVariations")
+.WithOpenApi();
 
 app.MapGet("/api/products/{id}", (string id) =>
 {

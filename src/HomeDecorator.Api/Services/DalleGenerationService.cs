@@ -2,6 +2,7 @@ using HomeDecorator.Core.Services;
 using OpenAI;
 using OpenAI.Images;
 using System.Net.Http;
+using System.Reflection;
 
 namespace HomeDecorator.Api.Services;
 
@@ -70,7 +71,13 @@ public class DalleGenerationService : IGenerationService
     {
         try
         {
-            _logger.LogInformation("Starting DALL-E image generation for prompt: {Prompt}, decor style: {DecorStyle} with image: {OriginalImage}", prompt, decorStyle, originalImageUrl);
+            _logger.LogInformation("Starting DALL-E 2 image variation generation for image: {OriginalImage}, decor style: {DecorStyle}", originalImageUrl, decorStyle);
+
+            // Log the prompt for context, even though we won't use it directly with the image variation API
+            if (!string.IsNullOrEmpty(prompt))
+            {
+                _logger.LogInformation("User prompt (for context only): {Prompt}", prompt);
+            }
 
             // Validate API key first
             var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ??
@@ -84,9 +91,7 @@ public class DalleGenerationService : IGenerationService
             }
 
             _logger.LogInformation("Using API key that starts with: {ApiKeyStart}",
-                apiKey.Length > 5 ? apiKey.Substring(0, 5) + "..." : "invalid");
-
-            // Download the original image if it's a URL
+                apiKey.Length > 5 ? apiKey.Substring(0, 5) + "..." : "invalid");            // Download the original image if it's a URL
             byte[]? originalImageBytes = null;
             Uri? imageUri = null;
 
@@ -110,82 +115,121 @@ public class DalleGenerationService : IGenerationService
                 throw new ArgumentException($"Invalid image URL format: {originalImageUrl}");
             }
 
-            // Create a comprehensive prompt for home decoration
-            var enhancedPrompt = BuildEnhancedPrompt(prompt, originalImageUrl, decorStyle);
-            _logger.LogInformation("Enhanced prompt: {EnhancedPrompt}", enhancedPrompt);
+            if (originalImageBytes == null || originalImageBytes.Length == 0)
+            {
+                throw new InvalidOperationException("Failed to obtain image data from the provided URL");
+            }
 
             try
             {
-                var client = _openAIClient.GetImageClient("dall-e-3");
-
-                // Configuration for image generation
-                // Note: We're still using standard text-to-image generation, even with the original image as reference
-                // DALL-E 3 doesn't have a direct image-to-image API, but we describe the original image in the prompt
-                var options = new ImageGenerationOptions
-                {
-                    Size = GeneratedImageSize.W1024xH1024,
-                    Quality = GeneratedImageQuality.Standard,
-                    Style = GeneratedImageStyle.Natural
-                    // Url is the default format
-                }; _logger.LogInformation("Calling DALL-E API with enhanced prompt");
+                // Save image to a temporary file since the SDK requires a file path for variations
+                string tempImagePath = Path.Combine(Path.GetTempPath(), $"dalle_input_{Guid.NewGuid()}.png");
 
                 try
                 {
-                    var response = await client.GenerateImageAsync(enhancedPrompt, options);
-                    _logger.LogInformation("DALL-E API response received");
+                    // Save the downloaded image to the temporary file
+                    await File.WriteAllBytesAsync(tempImagePath, originalImageBytes);
+                    _logger.LogInformation("Saved input image to temporary file: {TempPath}", tempImagePath);
 
-                    if (response == null)
-                    {
-                        _logger.LogError("DALL-E API returned null response");
-                        throw new InvalidOperationException("DALL-E API returned null response");
+                    // Initialize the ImageClient with DALL-E 2 model
+                    var imageClient = _openAIClient.GetImageClient("dall-e-2");
+
+                    _logger.LogInformation("Calling DALL-E 2 API with image variation request");
+
+                    try
+                    {                        // Create image variation using the file path
+                        var response = await imageClient.GenerateImageVariationAsync(tempImagePath);
+
+                        _logger.LogInformation("Successfully received DALL-E 2 API response");
+
+                        // Get the generated image from the response
+                        if (response == null || response.Value == null)
+                        {
+                            _logger.LogError("DALL-E API returned null response");
+                            throw new InvalidOperationException("DALL-E API returned null response");
+                        }                        // Inspect the generated image object to find the URL
+                        var generatedImage = response.Value;
+
+                        // Log all available properties for debugging
+                        _logger.LogInformation("Generated image type: {Type}", generatedImage.GetType().Name);
+
+                        // Try to extract URL from different potential properties
+                        string? generatedImageUrl = null;
+
+                        // Try to use reflection to find the URL property
+                        var urlProperty = generatedImage.GetType().GetProperty("Url") ??
+                                          generatedImage.GetType().GetProperty("Uri") ??
+                                          generatedImage.GetType().GetProperty("ImageUrl");
+
+                        if (urlProperty != null)
+                        {
+                            var urlValue = urlProperty.GetValue(generatedImage);
+                            generatedImageUrl = urlValue?.ToString();
+                        }
+
+                        // If we couldn't find a URL property, try to use ToString() on the image itself
+                        if (string.IsNullOrEmpty(generatedImageUrl))
+                        {
+                            generatedImageUrl = generatedImage.ToString();
+                        }
+
+                        if (string.IsNullOrEmpty(generatedImageUrl))
+                        {
+                            _logger.LogError("DALL-E API returned null or empty image URL");
+                            throw new InvalidOperationException("DALL-E API returned null or empty image URL");
+                        }
+                        _logger.LogInformation("DALL-E 2 generated image URL: {ImageUrl}", generatedImageUrl);
+
+                        // Download and store the image permanently
+                        var storedImageUrl = await _storageService.StoreImageFromUrlAsync(
+                            generatedImageUrl,
+                            "generated");
+
+                        _logger.LogInformation("Image stored successfully at: {StoredUrl}", storedImageUrl);
+                        return storedImageUrl;
                     }
-
-                    if (response.Value == null)
+                    catch (HttpRequestException ex) when (ex.Message.Contains("401"))
                     {
-                        _logger.LogError("DALL-E API returned null Value in response");
-                        throw new InvalidOperationException("DALL-E API returned null Value in response");
+                        _logger.LogError(ex, "DALL-E API authentication failed (401 Unauthorized): {Message}", ex.Message);
+                        throw new InvalidOperationException("DALL-E API authentication failed. Please check your API key.", ex);
                     }
-
-                    if (response.Value.ImageUri == null)
+                    catch (HttpRequestException ex) when (ex.Message.Contains("429"))
                     {
-                        _logger.LogError("DALL-E API returned null ImageUri");
-                        throw new InvalidOperationException("DALL-E API returned null ImageUri");
+                        _logger.LogError(ex, "DALL-E API rate limit exceeded (429 Too Many Requests): {Message}", ex.Message);
+                        throw new InvalidOperationException("DALL-E API rate limit exceeded or insufficient quota. Please check your billing status.", ex);
                     }
-
-                    _logger.LogInformation("DALL-E generation successful, image URI: {ImageUri}", response.Value.ImageUri);
-
-                    // Download and store the image permanently
-                    var storedImageUrl = await _storageService.StoreImageFromUrlAsync(
-                        response.Value.ImageUri.ToString(),
-                        "generated");
-
-                    _logger.LogInformation("Image stored successfully at: {StoredUrl}", storedImageUrl);
-                    return storedImageUrl;
+                    catch (HttpRequestException ex) when (ex.Message.Contains("400"))
+                    {
+                        _logger.LogError(ex, "DALL-E API rejected the request (400 Bad Request): {Message}", ex.Message);
+                        throw new InvalidOperationException($"DALL-E API rejected the request: {ex.Message}", ex);
+                    }
+                    catch (HttpRequestException ex) when (ex.Message.Contains("500"))
+                    {
+                        _logger.LogError(ex, "DALL-E API server error (500 Internal Server Error): {Message}", ex.Message);
+                        throw new InvalidOperationException($"DALL-E API server error: {ex.Message}", ex);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Unknown error calling DALL-E API: {Message}", ex.Message);
+                        throw new InvalidOperationException($"Error calling DALL-E API: {ex.Message}", ex);
+                    }
                 }
-                catch (HttpRequestException ex) when (ex.Message.Contains("401"))
+                finally
                 {
-                    _logger.LogError(ex, "DALL-E API authentication failed (401 Unauthorized): {Message}", ex.Message);
-                    throw new InvalidOperationException("DALL-E API authentication failed. Please check your API key.", ex);
-                }
-                catch (HttpRequestException ex) when (ex.Message.Contains("429"))
-                {
-                    _logger.LogError(ex, "DALL-E API rate limit exceeded (429 Too Many Requests): {Message}", ex.Message);
-                    throw new InvalidOperationException("DALL-E API rate limit exceeded or insufficient quota. Please check your billing status.", ex);
-                }
-                catch (HttpRequestException ex) when (ex.Message.Contains("400"))
-                {
-                    _logger.LogError(ex, "DALL-E API rejected the request (400 Bad Request): {Message}", ex.Message);
-                    throw new InvalidOperationException($"DALL-E API rejected the request: {ex.Message}", ex);
-                }
-                catch (HttpRequestException ex) when (ex.Message.Contains("500"))
-                {
-                    _logger.LogError(ex, "DALL-E API server error (500 Internal Server Error): {Message}", ex.Message);
-                    throw new InvalidOperationException($"DALL-E API server error: {ex.Message}", ex);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Unknown error calling DALL-E API: {Message}", ex.Message);
-                    throw new InvalidOperationException($"Error calling DALL-E API: {ex.Message}", ex);
+                    // Clean up the temporary file regardless of success or failure
+                    try
+                    {
+                        if (File.Exists(tempImagePath))
+                        {
+                            File.Delete(tempImagePath);
+                            _logger.LogInformation("Deleted temporary file: {TempPath}", tempImagePath);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to delete temporary file: {TempPath}", tempImagePath);
+                        // Don't throw here as this is just cleanup
+                    }
                 }
             }
             catch (Exception ex)
@@ -206,24 +250,19 @@ public class DalleGenerationService : IGenerationService
     async Task<string> IGenerationService.GenerateImageAsync(string originalImageUrl, string prompt)
     {
         // Forward to the new method with a default/placeholder decorStyle
-        // Or, if decorStyle is essential, this might throw NotImplementedException or similar
         return await GenerateImageAsync(originalImageUrl, prompt, "UserDefined"); // Or some other default
     }
 
     public Task<string> GetGenerationStatusAsync(string requestId)
     {
         // DALL-E is synchronous, so we always return completed
-        // In a real implementation, this might track async jobs
         return Task.FromResult("Completed");
     }
 
     public Task<List<string>> GetRecentGenerationsAsync(string userId, int count = 5)
     {
         _logger.LogInformation("Getting recent generations for user: {UserId}", userId);
-
         // This would typically query the database for recent generations
-        // For now, return empty list since we don't have user context here
-        // The proper implementation will be through the ImageGenerationOrchestrator
         return Task.FromResult(new List<string>());
     }
 
