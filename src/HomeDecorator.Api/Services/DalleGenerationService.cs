@@ -66,54 +66,23 @@ public class DalleGenerationService : IGenerationService
         });
     }
 
-    // Helper method to log available configuration keys for troubleshooting
-    private void LogAvailableConfigurationKeys(IConfiguration configuration, ILogger logger)
+    public async Task<string> GenerateImageAsync(string originalImageUrl, string prompt, string decorStyle)
     {
         try
         {
-            logger.LogInformation("Checking available configuration keys:");
-
-            // Check if we can find anything related to OpenAI or DALL-E
-            foreach (var pair in configuration.AsEnumerable())
-            {
-                if (pair.Key.Contains("OpenAI", StringComparison.OrdinalIgnoreCase) ||
-                    pair.Key.Contains("DALL", StringComparison.OrdinalIgnoreCase))
-                {
-                    logger.LogInformation("Found key: {Key}", pair.Key);
-                }
-            }
-
-            // Log the user secrets ID to help verify if user secrets are loaded
-            var userSecretsIdType = typeof(Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute);
-            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-            var attribute = assembly.GetCustomAttributes(userSecretsIdType, false).FirstOrDefault();
-
-            if (attribute != null)
-            {
-                var userSecretsId = attribute.GetType().GetProperty("UserSecretsId")?.GetValue(attribute);
-                logger.LogInformation("User Secrets ID: {UserSecretsId}", userSecretsId);
-                logger.LogInformation("User secrets should be stored in: %APPDATA%\\Microsoft\\UserSecrets\\{UserSecretsId}\\secrets.json", userSecretsId);
-            }
-            else
-            {
-                logger.LogWarning("No UserSecretsId attribute found on assembly");
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error while logging configuration keys");
-        }
-    }
-
-    public async Task<string> GenerateImageAsync(string originalImageUrl, string prompt)
-    {
-        try
-        {
-            _logger.LogInformation("Starting DALL-E image generation for prompt: {Prompt} with image: {OriginalImage}", prompt, originalImageUrl);
+            _logger.LogInformation("Starting DALL-E image generation for prompt: {Prompt}, decor style: {DecorStyle} with image: {OriginalImage}", prompt, decorStyle, originalImageUrl);
 
             // Validate API key first
             var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ??
-                "DallE:ApiKey not found in configuration";
+                _configuration["DallE:ApiKey"] ??
+                _configuration["OpenAI:ApiKey"];
+
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                _logger.LogError("API key is not configured.");
+                throw new InvalidOperationException("API key is not configured.");
+            }
+
             _logger.LogInformation("Using API key that starts with: {ApiKeyStart}",
                 apiKey.Length > 5 ? apiKey.Substring(0, 5) + "..." : "invalid");
 
@@ -142,7 +111,7 @@ public class DalleGenerationService : IGenerationService
             }
 
             // Create a comprehensive prompt for home decoration
-            var enhancedPrompt = BuildEnhancedPrompt(prompt, originalImageUrl);
+            var enhancedPrompt = BuildEnhancedPrompt(prompt, originalImageUrl, decorStyle);
             _logger.LogInformation("Enhanced prompt: {EnhancedPrompt}", enhancedPrompt);
 
             try
@@ -232,6 +201,15 @@ public class DalleGenerationService : IGenerationService
             throw;
         }
     }
+
+    // This explicit implementation is required if you want to keep the original signature for IGenerationService
+    async Task<string> IGenerationService.GenerateImageAsync(string originalImageUrl, string prompt)
+    {
+        // Forward to the new method with a default/placeholder decorStyle
+        // Or, if decorStyle is essential, this might throw NotImplementedException or similar
+        return await GenerateImageAsync(originalImageUrl, prompt, "UserDefined"); // Or some other default
+    }
+
     public Task<string> GetGenerationStatusAsync(string requestId)
     {
         // DALL-E is synchronous, so we always return completed
@@ -248,15 +226,48 @@ public class DalleGenerationService : IGenerationService
         // The proper implementation will be through the ImageGenerationOrchestrator
         return Task.FromResult(new List<string>());
     }
-    private string BuildEnhancedPrompt(string userPrompt, string originalImageUrl)
+
+    // Helper method to log available configuration keys for troubleshooting
+    private void LogAvailableConfigurationKeys(IConfiguration configuration, ILogger logger)
+    {
+        logger.LogInformation("Available configuration keys:");
+        foreach (var kvp in configuration.AsEnumerable().OrderBy(c => c.Key))
+        {
+            logger.LogInformation($"  {kvp.Key}: {kvp.Value?.Substring(0, Math.Min(kvp.Value.Length, 50))}...");
+        }
+
+        // Log User Secrets ID if available
+        try
+        {
+            var assembly = System.Reflection.Assembly.GetEntryAssembly();
+            var attribute = assembly?.GetCustomAttributes(typeof(Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute), false).FirstOrDefault();
+            if (attribute != null)
+            {
+                var userSecretsId = attribute.GetType().GetProperty("UserSecretsId")?.GetValue(attribute);
+                logger.LogInformation("User Secrets ID: {UserSecretsId}", userSecretsId);
+                logger.LogInformation("User secrets should be stored in: %APPDATA%\\Microsoft\\UserSecrets\\{UserSecretsId}\\secrets.json", userSecretsId);
+            }
+            else
+            {
+                logger.LogWarning("No UserSecretsId attribute found on assembly");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error while logging configuration keys");
+        }
+    }
+
+    private string BuildEnhancedPrompt(string userPrompt, string originalImageUrl, string decorStyle)
     {
         // Enhance the user's prompt with context for home decoration
         // Include information about using the original image as a base
-        return $"Transform this interior/exterior home space into a beautiful, professionally designed version. " +
-               $"Focus on: {userPrompt}. " +
-               $"Style: modern, elegant, well-lit, magazine-quality photography. " +
-               $"Ensure the space looks realistic, inviting, and professionally decorated. " +
-               $"Include proper lighting, color coordination, and high-end finishes. " +
-               $"Maintain the same layout and architectural elements as the original image, but update the design style.";
+        // Focus on maintaining structural elements and changing decor.
+        return $"Transform this interior/exterior home space into a beautiful, professionally designed version in a '{decorStyle}' style. " +
+               $"The user's specific request is: '{userPrompt}'. " +
+               $"IMPORTANT: Maintain the original room shape, window positions, ceiling, and floor. " +
+               $"Focus the style changes on elements like wall decor, lighting, furniture, textiles, and accessories. " +
+               $"The final image should look like a realistic, inviting, and professionally decorated space with appropriate lighting, color coordination, and high-end finishes for the '{decorStyle}' style. " +
+               $"Use the provided image as a strong reference for the existing layout and architectural elements, updating only the decor and style as requested.";
     }
 }

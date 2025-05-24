@@ -54,6 +54,8 @@ builder.Services.AddSingleton<IProductMatcherService, MockProductMatcherService>
 // Register image request repository and orchestrator
 builder.Services.AddSingleton<IImageRequestRepository, SqliteImageRequestRepository>();
 builder.Services.AddSingleton<ImageGenerationOrchestrator>();
+// Register log service for request logs
+builder.Services.AddSingleton<ILogService, SqliteLogService>();
 
 // Register HttpClient for services that need it
 builder.Services.AddHttpClient();

@@ -9,6 +9,7 @@ public partial class NewDesignPage : ContentPage
     private readonly IGenerationService _generationService;
     private readonly ApiService _apiService;
     private FileResult? _selectedPhoto;
+    private readonly Dictionary<string, string> _decorStyles;
 
     public NewDesignPage(IFeatureFlagService featureFlagService, IGenerationService generationService, ApiService apiService)
     {
@@ -16,6 +17,26 @@ public partial class NewDesignPage : ContentPage
         _featureFlagService = featureFlagService;
         _generationService = generationService;
         _apiService = apiService;
+
+        _decorStyles = new Dictionary<string, string>
+        {
+            { "Modern", "A detailed prompt for a modern look focusing on clean lines, neutral colors, and minimalist furniture." },
+            { "Contemporary", "A detailed prompt for a contemporary look featuring current trends, fluid shapes, and a mix of textures." },
+            { "Minimalist", "A detailed prompt for a minimalist look emphasizing simplicity, functionality, and a monochromatic color palette." },
+            { "Industrial", "A detailed prompt for an industrial look showcasing raw materials like brick and metal, open spaces, and vintage-inspired furniture." },
+            { "Bohemian", "A detailed prompt for a bohemian look characterized by a relaxed atmosphere, vibrant colors, and eclectic patterns." },
+            { "Farmhouse", "A detailed prompt for a farmhouse look that is cozy and rustic, with natural wood, comfortable furniture, and vintage accents." }
+        };
+
+        foreach (var style in _decorStyles.Keys)
+        {
+            StylePicker.Items.Add(style);
+        }
+        // Set a default selection if desired
+        if (StylePicker.Items.Count > 0)
+        {
+            StylePicker.SelectedIndex = 0;
+        }
     }
     private async void OnTakePhotoClicked(object sender, EventArgs e)
     {
@@ -53,9 +74,9 @@ public partial class NewDesignPage : ContentPage
     }
     private async void OnGenerateDesignClicked(object sender, EventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(PromptEditor.Text))
+        if (StylePicker.SelectedItem == null)
         {
-            await DisplayAlert("Missing Information", "Please enter a design prompt.", "OK");
+            await DisplayAlert("Missing Information", "Please select a design style.", "OK");
             return;
         }
 
@@ -88,8 +109,14 @@ public partial class NewDesignPage : ContentPage
                 throw new Exception($"Failed to upload image: {ex.Message}", ex);
             }
 
+            // Get the selected style and its corresponding detailed prompt
+            var selectedStyleKey = StylePicker.SelectedItem.ToString();
+            var detailedPromptForStyle = _decorStyles[selectedStyleKey];
+
             // Create the image generation request
-            var response = await _apiService.CreateImageRequestAsync(imageUrl, PromptEditor.Text);
+            // The 'selectedStyleKey' is sent as the 'decorStyle' (which was previously the 'prompt' field in CreateImageRequestDto)
+            // The 'detailedPromptForStyle' is sent as the 'customPrompt' (the new field in CreateImageRequestDto for the actual generation instructions)
+            var response = await _apiService.CreateImageRequestAsync(imageUrl, selectedStyleKey, detailedPromptForStyle);
 
             // Show initial response
             await DisplayAlert("Generation Started",

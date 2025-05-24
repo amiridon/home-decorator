@@ -1,5 +1,5 @@
 using HomeDecorator.Core.Models;
-using HomeDecorator.Core.Services;
+using HomeDecorator.Core.Services; // ensure ILogService is included
 
 namespace HomeDecorator.Api.Services;
 
@@ -13,6 +13,7 @@ public class ImageGenerationOrchestrator
     private readonly IBillingService _billingService;
     private readonly IProductMatcherService _productMatcherService;
     private readonly ILogger<ImageGenerationOrchestrator> _logger;
+    private readonly ILogService _logService; // replace ISqliteLogService with ILogService
 
     // Cost configuration - in a real app this would come from configuration
     private const int GENERATION_COST_CREDITS = 1;
@@ -22,13 +23,15 @@ public class ImageGenerationOrchestrator
         IImageRequestRepository imageRequestRepository,
         IBillingService billingService,
         IProductMatcherService productMatcherService,
-        ILogger<ImageGenerationOrchestrator> logger)
+        ILogger<ImageGenerationOrchestrator> logger,
+        ILogService logService) // Inject log service
     {
         _generationService = generationService;
         _imageRequestRepository = imageRequestRepository;
         _billingService = billingService;
         _productMatcherService = productMatcherService;
         _logger = logger;
+        _logService = logService; // Initialize log service
     }
 
     /// <summary>
@@ -36,14 +39,7 @@ public class ImageGenerationOrchestrator
     /// </summary>
     public async Task<ImageRequest> CreateAndProcessRequestAsync(string userId, CreateImageRequestDto requestDto)
     {
-        _logger.LogInformation("Starting image generation request for user: {UserId}", userId);        // Check if user has enough credits
-        var hasCredits = await _billingService.HasEnoughCreditsAsync(userId, GENERATION_COST_CREDITS);
-        if (!hasCredits)
-        {
-            _logger.LogWarning("User {UserId} has insufficient credits but allowing generation for testing", userId);
-            // Temporarily comment out this exception for testing
-            // throw new InvalidOperationException("Insufficient credits for image generation");
-        }
+        _logger.LogInformation("Starting image generation request for user: {UserId}", userId);
 
         // Create the request record
         var imageRequest = new ImageRequest
@@ -51,12 +47,15 @@ public class ImageGenerationOrchestrator
             UserId = userId,
             OriginalImageUrl = requestDto.OriginalImageUrl,
             Prompt = requestDto.Prompt,
+            CustomPrompt = requestDto.CustomPrompt,
             Status = "Pending",
             CreditsCharged = GENERATION_COST_CREDITS
         };
 
+        // Persist request and log creation
         await _imageRequestRepository.CreateAsync(imageRequest);
         _logger.LogInformation("Created image request: {RequestId}", imageRequest.Id);
+        _logService.Log(imageRequest.Id, "Information", "Image request created.");
 
         // Process the request asynchronously
         _ = Task.Run(async () => await ProcessRequestAsync(imageRequest));
@@ -87,6 +86,8 @@ public class ImageGenerationOrchestrator
     {
         try
         {
+            // Log that processing has started in DB
+            _logService.Log(request.Id, "Information", "Processing of image request started.");
             _logger.LogInformation("Processing image request: {RequestId}", request.Id);
 
             // Update status to processing
@@ -100,14 +101,18 @@ public class ImageGenerationOrchestrator
                 throw new InvalidOperationException("Failed to deduct credits");
             }
 
-            // Generate the image
-            var generatedImageUrl = await _generationService.GenerateImageAsync(
-                request.OriginalImageUrl,
-                request.Prompt);
+            // Determine the prompt to use for image generation
+            string generationPrompt = !string.IsNullOrEmpty(request.CustomPrompt)
+                ? request.CustomPrompt
+                : $"Update the decor style to {request.Prompt}. Maintain the room's structural integrity, including walls, windows, ceiling, and floor. Focus on changing decor elements like furniture, wall art, and lighting."; // Fallback if CustomPrompt is missing
 
-            // Update request with results
-            request.Status = "Completed";
+            // Generate the image using the determined prompt and the decor style (request.Prompt)
+            var generatedImageUrl = await _generationService.GenerateImageAsync(request.OriginalImageUrl, generationPrompt, request.Prompt);
             request.GeneratedImageUrl = generatedImageUrl;
+            _logger.LogInformation("Generated image for request {RequestId}: {GeneratedImageUrl}", request.Id, generatedImageUrl);
+
+            // Update status to completed
+            request.Status = "Completed";
             request.CompletedAt = DateTime.UtcNow;
             await _imageRequestRepository.UpdateAsync(request);
 
@@ -125,6 +130,9 @@ public class ImageGenerationOrchestrator
             request.ErrorMessage = ex.Message;
             request.CompletedAt = DateTime.UtcNow;
             await _imageRequestRepository.UpdateAsync(request);
+
+            // Log error to database
+            _logService.Log(request.Id, "Error", ex.Message);
 
             // Note: In a production system, you might want to refund credits on failure
         }

@@ -36,16 +36,17 @@
                                 StrokeShape="{RoundRectangle CornerRadius=10}"
                                 Padding="20">
                                 <VerticalStackLayout Spacing="15">
-                                        <Label Text="Design Prompt"
+                                        <Label Text="Select Design Style"
                                                FontSize="20"
                                                FontAttributes="Bold"/>
 
-                                        <Label Text="Tell us how you'd like to transform this space"/>
+                                        <Label Text="Choose a decor style for your space"/>
 
-                                        <Editor x:Name="PromptEditor"
-                                                Placeholder="Examples: Modern farmhouse living room with natural wood accents; Minimalist kitchen with clean lines and marble countertops"
-                                                HeightRequest="120"
-                                                AutoSize="TextChanges"/>
+                                        <Picker x:Name="StylePicker"
+                                                Title="Select a style">
+                                                <!-- Items will be added from code-behind -->
+                                        </Picker>
+
                                         <Button Text="Generate Design"
                                                 BackgroundColor="#34C759"
                                                 TextColor="White"

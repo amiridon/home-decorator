@@ -53,6 +53,12 @@ namespace HomeDecorator.MauiApp.Services
             return Task.FromResult("https://via.placeholder.com/400x300?text=Generated+Image+(Mock)");
         }
 
+        public Task<string> GenerateImageAsync(string originalImageUrl, string prompt, string decorStyle)
+        {
+            // Return a placeholder image URL that includes the decor style for mock purposes
+            return Task.FromResult($"https://via.placeholder.com/400x300?text=Generated+Image+(Mock)+Style:{decorStyle}");
+        }
+
         public Task<string> GetGenerationStatusAsync(string requestId)
         {
             // Always return completed status

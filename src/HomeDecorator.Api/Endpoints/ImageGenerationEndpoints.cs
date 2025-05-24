@@ -3,6 +3,7 @@ using HomeDecorator.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using HomeDecorator.Core.Services;
 using System;
+using System.Linq; // for LINQ support
 
 namespace HomeDecorator.Api.Endpoints;
 
@@ -138,6 +139,36 @@ public static class ImageGenerationEndpoints
         })
         // .RequireAuthorization() // Temporarily disabled for development testing
         .WithName("GetImageRequest")
+        .WithTags("Image Generation")
+        .WithOpenApi();
+
+        // Get logs for an image generation request
+        app.MapGet("/api/image-request/{id}/logs", (
+            string id,
+            ILogService logService) =>
+        {
+            var logs = logService.GetLogs(id);
+            return Results.Ok(logs);
+        })
+        .WithName("GetImageRequestLogs")
+        .WithTags("Image Generation")
+        .WithOpenApi();
+
+        // Get logs for the most recent image request (no ID needed)
+        app.MapGet("/api/image-request/logs/latest", async (
+            IImageRequestRepository repo,
+            ILogService logService) =>
+        {
+            var recentList = await repo.GetRecentAsync(1);
+            if (recentList == null || !recentList.Any())
+            {
+                return Results.NotFound(new { error = "No image requests found." });
+            }
+            var latest = recentList.First();
+            var logs = logService.GetLogs(latest.Id);
+            return Results.Ok(new { requestId = latest.Id, logs });
+        })
+        .WithName("GetLatestImageRequestLogs")
         .WithTags("Image Generation")
         .WithOpenApi();
 

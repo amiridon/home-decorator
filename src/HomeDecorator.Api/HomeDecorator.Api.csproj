@@ -24,4 +24,9 @@
     <ProjectReference Include="..\HomeDecorator.Infrastructure\HomeDecorator.Infrastructure.csproj" />
   </ItemGroup>
 
+  <!-- Exclude unused mock generation service -->
+  <ItemGroup>
+    <Compile Remove="Services\MockGenerationService.cs" />
+  </ItemGroup>
+
 </Project>

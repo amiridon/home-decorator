@@ -8,7 +8,8 @@ public class ImageRequest
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public string UserId { get; set; } = string.Empty;
     public string OriginalImageUrl { get; set; } = string.Empty;
-    public string Prompt { get; set; } = string.Empty;
+    public string Prompt { get; set; } = string.Empty; // This is the Decor Style Key
+    public string? CustomPrompt { get; set; } // This is the detailed application-controlled prompt
     public string Status { get; set; } = "Pending"; // Pending, Processing, Completed, Failed
     public string? GeneratedImageUrl { get; set; }
     public int CreditsCharged { get; set; } = 0;
@@ -23,7 +24,8 @@ public class ImageRequest
 public class CreateImageRequestDto
 {
     public string OriginalImageUrl { get; set; } = string.Empty;
-    public string Prompt { get; set; } = string.Empty;
+    public string Prompt { get; set; } = string.Empty; // This will now be used for Decor Style
+    public string? CustomPrompt { get; set; } // Optional: for additional user text if needed beyond style selection
 }
 
 /// <summary>

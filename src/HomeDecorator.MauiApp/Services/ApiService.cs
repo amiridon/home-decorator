@@ -161,6 +161,31 @@ namespace HomeDecorator.MauiApp.Services
         }
 
         /// <summary>
+        /// Creates an image generation request
+        /// </summary>
+        public async Task<ImageRequest> CreateImageRequestAsync(string originalImageUrl, string decorStyle, string customPrompt)
+        {
+            try
+            {
+                var request = new CreateImageRequestDto
+                {
+                    OriginalImageUrl = originalImageUrl,
+                    Prompt = decorStyle, // This will be the decor style key like "Modern"
+                    CustomPrompt = customPrompt // This will be the detailed application-controlled prompt
+                };
+
+                var response = await _httpClient.PostAsJsonAsync($"{_baseUrl}/api/image", request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<ImageRequest>() ?? throw new InvalidOperationException("No response from API");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating image request: {ex.Message}");
+                throw;
+            }
+        }
+
+        /// <summary>
         /// Gets an image generation request by ID
         /// </summary>
         public async Task<ImageRequestResponseDto> GetImageRequestAsync(string requestId)

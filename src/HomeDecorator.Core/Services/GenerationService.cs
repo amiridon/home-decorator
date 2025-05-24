@@ -15,6 +15,15 @@ public interface IGenerationService
     Task<string> GenerateImageAsync(string originalImageUrl, string prompt);
 
     /// <summary>
+    /// Generates an image from a prompt and decor style
+    /// </summary>
+    /// <param name="originalImageUrl">URL of the original image</param>
+    /// <param name="prompt">The text prompt for generation</param>
+    /// <param name="decorStyle">The decor style for the image</param>
+    /// <returns>URL of the generated image</returns>
+    Task<string> GenerateImageAsync(string originalImageUrl, string prompt, string decorStyle);
+
+    /// <summary>
     /// Gets the status of a generation request
     /// </summary>
     /// <param name="requestId">The ID of the generation request</param>
