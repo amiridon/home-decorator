@@ -30,20 +30,47 @@ namespace HomeDecorator.Api.Services
 
             var command = connection.CreateCommand();
             command.CommandText = @"
-                CREATE TABLE IF NOT EXISTS credit_transactions (
-                    id TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL,
-                    amount INTEGER NOT NULL,
-                    type TEXT NOT NULL,
-                    description TEXT,
-                    reference_id TEXT,
-                    timestamp TEXT NOT NULL
-                );
-                
-                CREATE INDEX IF NOT EXISTS ix_credit_transactions_user_id 
-                ON credit_transactions(user_id);
-            ";
+            CREATE TABLE IF NOT EXISTS credit_transactions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                amount INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                description TEXT,
+                reference_id TEXT,
+                timestamp TEXT NOT NULL
+            );
+            
+            CREATE INDEX IF NOT EXISTS ix_credit_transactions_user_id 
+            ON credit_transactions(user_id);
+        ";
             command.ExecuteNonQuery();
+
+            // Add initial credits for the test user if they don't exist already
+            var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = @"
+            SELECT COUNT(*) FROM credit_transactions WHERE user_id = 'test-user';
+        ";
+            var count = Convert.ToInt32(checkCommand.ExecuteScalar());
+
+            if (count == 0)
+            {
+                // Add 100 initial credits for testing
+                var insertCommand = connection.CreateCommand();
+                insertCommand.CommandText = @"
+                INSERT INTO credit_transactions (id, user_id, amount, type, description, timestamp)
+                VALUES ($id, $userId, $amount, $type, $description, $timestamp)
+            ";
+                insertCommand.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+                insertCommand.Parameters.AddWithValue("$userId", "test-user");
+                insertCommand.Parameters.AddWithValue("$amount", 100); // 100 credits
+                insertCommand.Parameters.AddWithValue("$type", "initial");
+                insertCommand.Parameters.AddWithValue("$description", "Initial test credits");
+                insertCommand.Parameters.AddWithValue("$timestamp", DateTime.UtcNow.ToString("o"));
+
+                insertCommand.ExecuteNonQuery();
+
+                Console.WriteLine("Added 100 initial credits for test-user");
+            }
         }
 
         public async Task<int> GetBalanceAsync(string userId)

@@ -21,13 +21,30 @@ public class SqliteImageRequestRepository : IImageRequestRepository
 
         InitializeDatabase();
     }
-
     private void InitializeDatabase()
     {
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
 
-        // Ensure ImageRequests table exists (already created in BaseRepository)
+        // First ensure Users table exists
+        var usersCommand = connection.CreateCommand();
+        usersCommand.CommandText = @"
+            CREATE TABLE IF NOT EXISTS Users (
+                Id TEXT PRIMARY KEY,
+                Name TEXT,
+                Email TEXT,
+                CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+            );";
+        usersCommand.ExecuteNonQuery();
+
+        // Ensure test user exists
+        var testUserCommand = connection.CreateCommand();
+        testUserCommand.CommandText = @"
+            INSERT OR IGNORE INTO Users (Id, Name, Email)
+            VALUES ('test-user', 'Test User', 'test@example.com');";
+        testUserCommand.ExecuteNonQuery();
+
+        // Ensure ImageRequests table exists
         var command = connection.CreateCommand();
         command.CommandText = @"
             CREATE TABLE IF NOT EXISTS ImageRequests (
@@ -44,6 +61,8 @@ public class SqliteImageRequestRepository : IImageRequestRepository
                 FOREIGN KEY(UserId) REFERENCES Users(Id)
             );";
         command.ExecuteNonQuery();
+
+        _logger.LogInformation("Database initialized with Users and ImageRequests tables");
     }
 
     public async Task<ImageRequest> CreateAsync(ImageRequest request)

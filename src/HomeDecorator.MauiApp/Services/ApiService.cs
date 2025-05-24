@@ -187,12 +187,10 @@ namespace HomeDecorator.MauiApp.Services
 
             // This will never be reached, but compiler needs it
             throw new InvalidOperationException("Failed to create image request after multiple attempts");
-        }
-
-        /// <summary>
-        /// Creates an image generation request
-        /// </summary>
-        public async Task<ImageRequest> CreateImageRequestAsync(string originalImageUrl, string decorStyle, string customPrompt)
+        }        /// <summary>
+                 /// Creates an image generation request
+                 /// </summary>
+        public async Task<ImageRequestResponseDto> CreateImageRequestAsync(string originalImageUrl, string decorStyle, string customPrompt)
         {
             try
             {
@@ -203,9 +201,27 @@ namespace HomeDecorator.MauiApp.Services
                     CustomPrompt = customPrompt // This will be the detailed application-controlled prompt
                 };
 
-                var response = await _httpClient.PostAsJsonAsync($"{_baseUrl}/api/image", request);
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadFromJsonAsync<ImageRequest>() ?? throw new InvalidOperationException("No response from API");
+                Console.WriteLine($"Creating image request with URL: {originalImageUrl}");
+                Console.WriteLine($"Decor style: {decorStyle}");
+                Console.WriteLine($"API endpoint: {_baseUrl}/api/image-request");
+
+                var response = await _httpClient.PostAsJsonAsync($"{_baseUrl}/api/image-request", request);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    string errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Image request failed with status {response.StatusCode}: {errorContent}");
+                    throw new HttpRequestException($"Image request failed with status {response.StatusCode}: {errorContent}");
+                }
+
+                var result = await response.Content.ReadFromJsonAsync<ImageRequestResponseDto>();
+                if (result == null)
+                    throw new InvalidOperationException("No response from API");
+
+                // Fix image URLs if they're relative
+                NormalizeImageUrls(result);
+
+                return result;
             }
             catch (Exception ex)
             {
@@ -214,8 +230,7 @@ namespace HomeDecorator.MauiApp.Services
             }
         }
 
-        /// <summary>
-        /// Gets an image generation request by ID
+        /// <summary>        /// Gets an image generation request by ID
         /// </summary>
         public async Task<ImageRequestResponseDto> GetImageRequestAsync(string requestId)
         {
@@ -224,7 +239,13 @@ namespace HomeDecorator.MauiApp.Services
                 var response = await _httpClient.GetFromJsonAsync<ImageRequestResponseDto>(
                     $"{_baseUrl}/api/image-request/{requestId}");
 
-                return response ?? throw new InvalidOperationException("Request not found");
+                if (response == null)
+                    throw new InvalidOperationException("Request not found");
+
+                // Fix image URLs if they're relative
+                NormalizeImageUrls(response);
+
+                return response;
             }
             catch (Exception ex)
             {
@@ -234,7 +255,26 @@ namespace HomeDecorator.MauiApp.Services
         }
 
         /// <summary>
-        /// Gets user's image generation history
+        /// Ensures image URLs are absolute by prepending the API base URL if needed
+        /// </summary>
+        private void NormalizeImageUrls(ImageRequestResponseDto response)
+        {
+            // Handle original image URL
+            if (!string.IsNullOrEmpty(response.OriginalImageUrl) && response.OriginalImageUrl.StartsWith("/"))
+            {
+                response.OriginalImageUrl = $"{_baseUrl}{response.OriginalImageUrl}";
+                Console.WriteLine($"Normalized original image URL: {response.OriginalImageUrl}");
+            }
+
+            // Handle generated image URL
+            if (!string.IsNullOrEmpty(response.GeneratedImageUrl) && response.GeneratedImageUrl.StartsWith("/"))
+            {
+                response.GeneratedImageUrl = $"{_baseUrl}{response.GeneratedImageUrl}";
+                Console.WriteLine($"Normalized generated image URL: {response.GeneratedImageUrl}");
+            }
+        }
+
+        /// <summary>        /// Gets user's image generation history
         /// </summary>
         public async Task<List<ImageRequestResponseDto>> GetImageHistoryAsync(int limit = 10)
         {
@@ -243,16 +283,25 @@ namespace HomeDecorator.MauiApp.Services
                 var response = await _httpClient.GetFromJsonAsync<List<ImageRequestResponseDto>>(
                     $"{_baseUrl}/api/history?limit={limit}");
 
-                return response ?? new List<ImageRequestResponseDto>();
+                if (response == null)
+                    return new List<ImageRequestResponseDto>();
+
+                // Normalize URLs for all items in the list
+                foreach (var item in response)
+                {
+                    NormalizeImageUrls(item);
+                }
+
+                return response;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error getting image history: {ex.Message}");
                 return new List<ImageRequestResponseDto>();
             }
-        }        /// <summary>
-                 /// Uploads an image and returns the URL
-                 /// </summary>
+        }/// <summary>
+         /// Uploads an image and returns the URL
+         /// </summary>
         public async Task<string> UploadImageAsync(Stream imageStream, string fileName)
         {
             try
@@ -311,9 +360,19 @@ namespace HomeDecorator.MauiApp.Services
                     Console.WriteLine($"Upload failed with status {response.StatusCode}: {errorContent}");
                     throw new HttpRequestException($"Upload failed with status {response.StatusCode}: {errorContent}");
                 }
-
                 var result = await response.Content.ReadFromJsonAsync<UploadResponse>();
-                return result?.ImageUrl ?? throw new InvalidOperationException("No image URL returned");
+                if (result == null || string.IsNullOrEmpty(result.ImageUrl))
+                    throw new InvalidOperationException("No image URL returned");
+
+                // Normalize the URL if it's a relative path
+                string imageUrl = result.ImageUrl;
+                if (imageUrl.StartsWith("/"))
+                {
+                    imageUrl = $"{_baseUrl}{imageUrl}";
+                    Console.WriteLine($"Normalized uploaded image URL: {imageUrl}");
+                }
+
+                return imageUrl;
             }
             catch (Exception ex)
             {

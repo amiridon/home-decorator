@@ -4,6 +4,8 @@ using OpenAI.Images;
 using System.Net.Http;
 using System.Reflection;
 using Microsoft.Extensions.Logging.Console;
+using SkiaSharp;
+using System.IO;
 
 namespace HomeDecorator.Api.Services;
 
@@ -17,12 +19,17 @@ public class DalleGenerationService : IGenerationService
     private readonly ILogger<DalleGenerationService> _logger;
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
-    private readonly DirectImageDownloader _directImageDownloader; public DalleGenerationService(
+    private readonly DirectImageDownloader _directImageDownloader;
+    private readonly ImageProcessingService _imageProcessingService;
+
+    public DalleGenerationService(
         IConfiguration configuration,
         IStorageService storageService,
-        ILogger<DalleGenerationService> logger)
+        ILogger<DalleGenerationService> logger,
+        ImageProcessingService imageProcessingService)
     {
         _configuration = configuration;
+        _imageProcessingService = imageProcessingService;
 
         try
         {
@@ -123,18 +130,14 @@ public class DalleGenerationService : IGenerationService
             {
                 throw new InvalidOperationException("Failed to obtain image data from the provided URL");
             }
-
             try
             {
-                // Save image to a temporary file since the SDK requires a file path for variations
-                string tempImagePath = Path.Combine(Path.GetTempPath(), $"dalle_input_{Guid.NewGuid()}.png");
+                // Process the image to ensure it meets DALL-E API requirements (PNG format, < 4MB)
+                string tempImagePath = await _imageProcessingService.EnsureImageMeetsDalleRequirements(originalImageBytes);
+                _logger.LogInformation("Image processed and ready for DALL-E API: {TempPath}", tempImagePath);
 
                 try
                 {
-                    // Save the downloaded image to the temporary file
-                    await File.WriteAllBytesAsync(tempImagePath, originalImageBytes);
-                    _logger.LogInformation("Saved input image to temporary file: {TempPath}", tempImagePath);
-
                     // Initialize the ImageClient with DALL-E 2 model
                     var imageClient = _openAIClient.GetImageClient("dall-e-2");
 
@@ -255,12 +258,46 @@ public class DalleGenerationService : IGenerationService
                             _logger.LogError("DALL-E generated image URL is not accessible: {ImageUrl}", generatedImageUrl);
                             throw new InvalidOperationException($"Generated image URL is not accessible: {generatedImageUrl}");
                         }                        // Download and store the image permanently
-                        var finalStoredImageUrl = await _storageService.StoreImageFromUrlAsync(
-                            generatedImageUrl,
-                            "generated");
+                        try
+                        {
+                            // First download the image bytes
+                            using var httpClient = new HttpClient();
+                            httpClient.Timeout = TimeSpan.FromSeconds(30);
 
-                        _logger.LogInformation("Image stored successfully at: {StoredUrl}", finalStoredImageUrl);
-                        return finalStoredImageUrl;
+                            _logger.LogInformation("Downloading image from URL: {ImageUrl}", generatedImageUrl);
+                            byte[] imageBytes = await httpClient.GetByteArrayAsync(generatedImageUrl);
+                            _logger.LogInformation("Successfully downloaded {BytesLength} bytes", imageBytes.Length);
+
+                            // Save to a temporary file
+                            string tempFile = Path.Combine(Path.GetTempPath(), $"dalle_download_{Guid.NewGuid()}.png");
+                            await File.WriteAllBytesAsync(tempFile, imageBytes);
+
+                            // Store using stream method instead of URL
+                            using var fileStream = File.OpenRead(tempFile);
+                            var finalStoredImageUrl = await _storageService.StoreImageFromStreamAsync(
+                                fileStream,
+                                $"dalle_generated_{Guid.NewGuid()}.png",
+                                "generated");
+
+                            _logger.LogInformation("Image stored successfully at: {StoredUrl}", finalStoredImageUrl);
+
+                            // Clean up temp file
+                            try
+                            {
+                                File.Delete(tempFile);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to delete temp file: {TempFile}", tempFile);
+                            }
+
+                            return finalStoredImageUrl;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error downloading and storing image: {Message}", ex.Message);
+                            throw new InvalidOperationException($"Failed to download and store image: {ex.Message}", ex);
+                        }
                     }
                     catch (HttpRequestException ex) when (ex.Message.Contains("401"))
                     {
@@ -396,7 +433,6 @@ public class DalleGenerationService : IGenerationService
             return false;
         }
     }
-
     private string BuildEnhancedPrompt(string userPrompt, string originalImageUrl, string decorStyle)
     {
         // Enhance the user's prompt with context for home decoration

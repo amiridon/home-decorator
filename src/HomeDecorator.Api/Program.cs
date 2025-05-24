@@ -53,27 +53,19 @@ builder.Configuration.GetSection("FeatureFlags").Bind(featureFlags);
 builder.Services.AddSingleton<IFeatureFlagService>(new FeatureFlagService(featureFlags));
 
 // Register core services
-
-// Register credit ledger service
-builder.Services.AddSingleton<ICreditLedgerService, SqliteCreditLedgerService>();
+builder.Services.AddScoped<IStorageService, LocalStorageService>();
+builder.Services.AddScoped<ICreditLedgerService, SqliteCreditLedgerService>();
+builder.Services.AddScoped<IImageRequestRepository, SqliteImageRequestRepository>();
+builder.Services.AddScoped<IGenerationService, DalleGenerationService>();
+builder.Services.AddScoped<ImageProcessingService>();
 
 // Register billing service
 Console.WriteLine("Using Stripe billing service");
 builder.Services.AddSingleton<IBillingService, StripeService>();
 
-// Register image generation services
-Console.WriteLine("Using real image generation services");
-builder.Services.AddSingleton<IGenerationService, DalleGenerationService>();
-// Use local storage for development - can switch to S3 later
-builder.Services.AddSingleton<IStorageService, LocalStorageService>();
-builder.Services.AddSingleton<IProductMatcherService, MockProductMatcherService>(); // Real one comes in Week 4
-
 // Register test service for DALL-E 2 variations
 builder.Services.AddSingleton<TestDalleVariationService>();
 
-// Register image request repository and orchestrator
-builder.Services.AddSingleton<IImageRequestRepository, SqliteImageRequestRepository>();
-builder.Services.AddSingleton<ImageGenerationOrchestrator>();
 // Register log service for request logs
 builder.Services.AddSingleton<ILogService, SqliteLogService>();
 
@@ -103,6 +95,17 @@ if (app.Environment.IsDevelopment())
 
 // Enable CORS
 app.UseCors("MauiAppPolicy");
+
+// Ensure image directories exist
+var imagesPath = Path.Combine(app.Environment.WebRootPath, "images");
+var uploadedPath = Path.Combine(imagesPath, "uploaded");
+var generatedPath = Path.Combine(imagesPath, "generated");
+
+Directory.CreateDirectory(imagesPath);
+Directory.CreateDirectory(uploadedPath);
+Directory.CreateDirectory(generatedPath);
+
+Console.WriteLine($"Ensured directories exist: {imagesPath}, {uploadedPath}, {generatedPath}");
 
 // Serve static files (for locally stored images)
 app.UseStaticFiles();
@@ -195,6 +198,52 @@ app.MapGet("/api/health", (HttpContext context) =>
     });
 })
 .WithName("ApiHealth");
+
+// Add a diagnostic endpoint for checking file existence
+app.MapGet("/api/check-file-exists", (HttpContext context, IWebHostEnvironment env) =>
+{
+    var filePath = context.Request.Query["path"].ToString();
+    if (string.IsNullOrEmpty(filePath))
+    {
+        return Results.BadRequest("Path parameter is required");
+    }
+
+    // Remove leading slash for file path resolution
+    if (filePath.StartsWith("/"))
+    {
+        filePath = filePath.Substring(1);
+    }
+
+    // Check if the file exists in wwwroot
+    var fullPath = Path.Combine(env.WebRootPath, filePath);
+    bool exists = File.Exists(fullPath);
+
+    // List directory contents if file not found to help debugging
+    var directoryContents = new List<string>();
+    if (!exists)
+    {
+        var directory = Path.GetDirectoryName(fullPath);
+        if (Directory.Exists(directory))
+        {
+            directoryContents = Directory.GetFiles(directory)
+                .Select(f => Path.GetFileName(f) ?? string.Empty)
+                .Where(f => !string.IsNullOrEmpty(f))
+                .ToList();
+        }
+    }
+
+    return Results.Ok(new
+    {
+        exists,
+        requestedPath = filePath,
+        fullPath,
+        directoryExists = Directory.Exists(Path.GetDirectoryName(fullPath)),
+        directoryContents
+    });
+})
+.WithName("CheckFileExists");
+
+// The file-exists endpoint is now handled by the FileSystemController
 
 // Test DALL-E 2 image variations endpoint (for development only)
 app.MapGet("/api/test-dalle-variations", async (

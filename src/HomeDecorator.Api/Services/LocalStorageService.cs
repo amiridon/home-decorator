@@ -94,11 +94,18 @@ public class LocalStorageService : IStorageService
 
                     // Save to local storage
                     await File.WriteAllBytesAsync(filePath, imageBytes);
-                    _logger.LogInformation("Successfully wrote file to: {FilePath}", filePath);
-
-                    // Return the local URL (relative to wwwroot)
+                    _logger.LogInformation("Successfully wrote file to: {FilePath}", filePath);            // Return the local URL (relative to wwwroot) with base URL for direct client access
                     var relativeUrl = $"/images/{category}/{fileName}";
-                    _logger.LogInformation("Image stored locally at: {FilePath}, accessible at: {RelativeUrl}", filePath, relativeUrl);
+                    var baseUrl = "http://localhost:5002"; // Base URL for development
+                    var fullUrl = $"{baseUrl}{relativeUrl}";
+                    _logger.LogInformation("Image stored locally at: {FilePath}, accessible at: {RelativeUrl}, Full URL: {FullUrl}", filePath, relativeUrl, fullUrl);
+
+                    // Check if file exists before returning
+                    if (!File.Exists(filePath))
+                    {
+                        _logger.LogError("File was not created successfully at path: {FilePath}", filePath);
+                    }
+
                     return relativeUrl;
                 }
                 catch (Exception ex) when (attempt < maxRetries)
@@ -143,11 +150,17 @@ public class LocalStorageService : IStorageService
             }
 
             // Then write to disk
-            await File.WriteAllBytesAsync(filePath, imageBytes);
+            await File.WriteAllBytesAsync(filePath, imageBytes); var relativeUrl = $"/images/{category}/{uniqueFileName}";
+            var baseUrl = "http://localhost:5002"; // Base URL for development
+            var fullUrl = $"{baseUrl}{relativeUrl}";
 
-            var relativeUrl = $"/images/{category}/{uniqueFileName}";
+            _logger.LogInformation("Image stored locally at: {FilePath}, accessible at: {RelativeUrl}, Full URL: {FullUrl}", filePath, relativeUrl, fullUrl);
 
-            _logger.LogInformation("Image stored locally at: {FilePath}, accessible at: {RelativeUrl}", filePath, relativeUrl);
+            // Check if file exists before returning
+            if (!File.Exists(filePath))
+            {
+                _logger.LogError("File was not created successfully at path: {FilePath}", filePath);
+            }
 
             return relativeUrl;
         }

@@ -107,10 +107,13 @@ public partial class NewDesignPage : ContentPage
             {
                 Console.WriteLine($"Image upload failed: {ex.Message}");
                 throw new Exception($"Failed to upload image: {ex.Message}", ex);
+            }            // Get the selected style and its corresponding detailed prompt
+            var selectedStyleKey = StylePicker.SelectedItem?.ToString() ?? "Modern";
+            if (!_decorStyles.ContainsKey(selectedStyleKey))
+            {
+                selectedStyleKey = _decorStyles.Keys.FirstOrDefault() ?? "Modern";
+                Console.WriteLine($"Selected style not found in dictionary, using default: {selectedStyleKey}");
             }
-
-            // Get the selected style and its corresponding detailed prompt
-            var selectedStyleKey = StylePicker.SelectedItem.ToString();
             var detailedPromptForStyle = _decorStyles[selectedStyleKey];
 
             // Create the image generation request
@@ -142,6 +145,32 @@ public partial class NewDesignPage : ContentPage
                             Console.WriteLine($"Using full URL: {fullUrl}");
                         }
 
+                        // Log detailed URL information for debugging
+                        Console.WriteLine($"Original URL: {completedRequest.GeneratedImageUrl}");
+                        Console.WriteLine($"Full URL being used: {fullUrl}");
+
+                        // Verify URL is valid
+                        var uri = new Uri(fullUrl);
+                        Console.WriteLine($"URI scheme: {uri.Scheme}, host: {uri.Host}, path: {uri.AbsolutePath}");
+
+                        // Check if the URL is for a local file
+                        if (uri.IsFile)
+                        {
+                            Console.WriteLine($"This is a file URI - check if file exists: {System.IO.File.Exists(uri.LocalPath)}");
+                        }
+                        // Try to ping the URL to see if it's accessible
+                        try
+                        {
+                            using var httpClient = new HttpClient();
+                            var pingResponse = httpClient.GetAsync(fullUrl).Result;
+                            Console.WriteLine($"HTTP response from image URL: {pingResponse.StatusCode}");
+                        }
+                        catch (Exception pingEx)
+                        {
+                            Console.WriteLine($"Failed to ping image URL: {pingEx.Message}");
+                            // Don't throw here, just log the error
+                        }
+
                         // Update UI on main thread and use try-catch for robust error handling
                         MainThread.BeginInvokeOnMainThread(() =>
                         {
@@ -154,6 +183,11 @@ public partial class NewDesignPage : ContentPage
                             catch (Exception ex)
                             {
                                 Console.WriteLine($"UI thread error setting image: {ex.Message}");
+
+                                // Show error to the user
+                                DisplayAlert("Image Display Error",
+                                    $"There was a problem displaying the image.\n\nURL: {fullUrl}\n\nError: {ex.Message}",
+                                    "OK");
                             }
                         });
                     }
@@ -162,6 +196,10 @@ public partial class NewDesignPage : ContentPage
                         Console.WriteLine($"Error setting image source: {ex.Message}");
                         // Continue execution to show the completed message even if image loading fails
                     }
+                }
+                else
+                {
+                    Console.WriteLine("Generated image URL is null or empty!");
                 }
 
                 await DisplayAlert("Design Completed",

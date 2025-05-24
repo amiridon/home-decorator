@@ -104,12 +104,47 @@ public class ImageGenerationOrchestrator
             // Determine the prompt to use for image generation
             string generationPrompt = !string.IsNullOrEmpty(request.CustomPrompt)
                 ? request.CustomPrompt
-                : $"Update the decor style to {request.Prompt}. Maintain the room's structural integrity, including walls, windows, ceiling, and floor. Focus on changing decor elements like furniture, wall art, and lighting."; // Fallback if CustomPrompt is missing
+                : $"Update the decor style to {request.Prompt}. Maintain the room's structural integrity, including walls, windows, ceiling, and floor. Focus on changing decor elements like furniture, wall art, and lighting."; // Fallback if CustomPrompt is missing            // Generate the image using the determined prompt and the decor style (request.Prompt)
+            _logger.LogInformation("Calling generation service with originalImageUrl: {OriginalImageUrl}", request.OriginalImageUrl);
+            _logService.Log(request.Id, "Information", $"Starting image generation with prompt: {generationPrompt}");
 
-            // Generate the image using the determined prompt and the decor style (request.Prompt)
-            var generatedImageUrl = await _generationService.GenerateImageAsync(request.OriginalImageUrl, generationPrompt, request.Prompt);
-            request.GeneratedImageUrl = generatedImageUrl;
-            _logger.LogInformation("Generated image for request {RequestId}: {GeneratedImageUrl}", request.Id, generatedImageUrl);
+            string generatedImageUrl;
+            try
+            {
+                generatedImageUrl = await _generationService.GenerateImageAsync(request.OriginalImageUrl, generationPrompt, request.Prompt);
+
+                if (string.IsNullOrEmpty(generatedImageUrl))
+                {
+                    _logger.LogError("Generation service returned empty URL");
+                    _logService.Log(request.Id, "Error", "Generation service returned empty URL");
+                    throw new InvalidOperationException("Generation service returned empty URL");
+                }
+
+                // Verify the URL format
+                _logger.LogInformation("Received generated image URL: {GeneratedImageUrl}", generatedImageUrl);
+                _logService.Log(request.Id, "Information", $"Image generated successfully. URL: {generatedImageUrl}");
+
+                // Check if the URL is relative and log it
+                if (generatedImageUrl.StartsWith("/"))
+                {
+                    _logger.LogInformation("Generated URL is relative. This is expected for local storage.");
+
+                    // Try to check if the file exists
+                    var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", generatedImageUrl.TrimStart('/'));
+                    bool fileExists = File.Exists(filePath);
+                    _logger.LogInformation("File exists at path {FilePath}: {Exists}", filePath, fileExists);
+                    _logService.Log(request.Id, "Information", $"Generated image file exists: {fileExists}. Path: {filePath}");
+                }
+
+                request.GeneratedImageUrl = generatedImageUrl;
+                _logger.LogInformation("Generated image for request {RequestId}: {GeneratedImageUrl}", request.Id, generatedImageUrl);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating image: {Message}", ex.Message);
+                _logService.Log(request.Id, "Error", $"Image generation failed: {ex.Message}");
+                throw;
+            }
 
             // Update status to completed
             request.Status = "Completed";
