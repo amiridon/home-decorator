@@ -56,5 +56,5 @@ Write-Host "You can now run the application to test DALL-E image generation."
 Write-Host ""
 Write-Host "To test directly, run:" -ForegroundColor Cyan
 Write-Host "dotnet run --project src\HomeDecorator.Api\HomeDecorator.Api.csproj" -ForegroundColor Cyan
-Write-Host "Then access: http://localhost:5184/api/test-dalle" -ForegroundColor Cyan
+Write-Host "Then access: http://localhost:5002/api/test-dalle" -ForegroundColor Cyan
 Write-Host ""

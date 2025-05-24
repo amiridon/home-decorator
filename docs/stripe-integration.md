@@ -31,7 +31,7 @@ The Home Decorator application uses Stripe for payment processing and credit pur
 
 3. **Run Stripe CLI for Local Webhook Testing**:
    ```powershell
-   stripe listen --forward-to http://localhost:5000/api/stripe/webhook
+   stripe listen --forward-to http://localhost:5002/api/stripe/webhook
    ```
 
 ### Production Environment

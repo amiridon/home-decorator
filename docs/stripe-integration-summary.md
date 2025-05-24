@@ -64,7 +64,7 @@ To test the Stripe integration:
 For local webhook testing, you can use the Stripe CLI:
 
 ```bash
-stripe listen --forward-to http://localhost:5000/api/stripe/webhook
+stripe listen --forward-to http://localhost:5002/api/stripe/webhook
 ```
 
 This will forward Stripe events to your local webhook endpoint.

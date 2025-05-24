@@ -21,12 +21,11 @@ public partial class SettingsPage : ContentPage
         bool enabled = e.Value;
 
         try
-        {
-            // Call the API to update the feature flag
+        {            // Call the API to update the feature flag
             var httpClient = new HttpClient();
             string baseUrl = DeviceInfo.Platform == DevicePlatform.Android
-                ? "https://10.0.2.2:5184" // Android emulator uses this IP for localhost
-                : "https://localhost:5184";
+                ? "https://10.0.2.2:7072" // Android emulator uses this IP for localhost
+                : "https://localhost:7072";
 
             // We need to handle SSL certificate issues in development
             var handler = new HttpClientHandler

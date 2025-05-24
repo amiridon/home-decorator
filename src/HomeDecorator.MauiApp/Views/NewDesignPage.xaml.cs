@@ -162,9 +162,32 @@ public partial class NewDesignPage : ContentPage
         {
             // Provide more detailed error information
             string errorDetails = ex.Message;
+
+            // Provide specific error messages based on the exception type or message contents
             if (ex.Message.Contains("copying content to stream"))
             {
                 errorDetails = "Error storing the generated image. This might be due to network issues or permission problems. Please try again with a different image.";
+            }
+            else if (ex.Message.Contains("400 Bad Request"))
+            {
+                if (ex.Message.Contains("File size too large"))
+                {
+                    errorDetails = "The image file is too large. Please choose a smaller image (less than 10MB).";
+                }
+                else if (ex.Message.Contains("Invalid file type"))
+                {
+                    errorDetails = "The image format is not supported. Please use JPEG, PNG, or WebP images.";
+                }
+                else
+                {
+                    errorDetails = "The server rejected the request. Please check your image and prompt.";
+                }
+            }
+
+            Console.WriteLine($"Error generating design: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Inner Exception: {ex.InnerException.Message}");
             }
 
             await DisplayAlert("Error", $"Failed to generate design: {errorDetails}", "OK");

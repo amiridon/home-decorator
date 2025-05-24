@@ -127,11 +127,17 @@ namespace HomeDecorator.MauiApp.Services
                     {
                         OriginalImageUrl = originalImageUrl,
                         Prompt = prompt
-                    };
+                    }; Console.WriteLine($"Sending image request - attempt {attempts}, URL: {originalImageUrl}, Prompt: {prompt}");
+                    Console.WriteLine($"API endpoint: {_baseUrl}/api/image-request");
 
-                    Console.WriteLine($"Sending image request - attempt {attempts}, URL: {originalImageUrl}, Prompt: {prompt}");
                     var response = await _httpClient.PostAsJsonAsync($"{_baseUrl}/api/image-request", request);
-                    response.EnsureSuccessStatusCode();
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        string errorContent = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine($"Image request failed with status {response.StatusCode}: {errorContent}");
+                        throw new HttpRequestException($"Image request failed with status {response.StatusCode}: {errorContent}");
+                    }
 
                     var result = await response.Content.ReadFromJsonAsync<ImageRequestResponseDto>();
                     if (result == null)
@@ -219,9 +225,12 @@ namespace HomeDecorator.MauiApp.Services
                     contentType = "image/webp";
 
                 streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
-                content.Add(streamContent, "file", fileName);
+                content.Add(streamContent, "file", fileName); Console.WriteLine($"Uploading image: {fileName}, size: {memoryStream.Length} bytes, to URL: {_baseUrl}/api/upload-image");
+                Console.WriteLine($"Content type: {contentType}");
 
-                Console.WriteLine($"Uploading image: {fileName}, size: {memoryStream.Length} bytes");
+                // Ensure stream is readable and positioned at the beginning
+                memoryStream.Position = 0;
+
                 var response = await _httpClient.PostAsync($"{_baseUrl}/api/upload-image", content);
 
                 if (!response.IsSuccessStatusCode)
