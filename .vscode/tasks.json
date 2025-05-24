@@ -24,7 +24,8 @@
                 "/consoleloggerparameters:NoSummary"
             ],
             "problemMatcher": "$msCompile"
-        },        {
+        },
+        {
             "label": "build-all",
             "dependsOn": [
                 "build-api",
@@ -34,6 +35,16 @@
                 "kind": "build",
                 "isDefault": true
             },
+            "problemMatcher": []
+        },
+        {
+            "label": "check-api-connectivity",
+            "command": "pwsh",
+            "type": "shell",
+            "args": [
+                "-Command",
+                "Write-Host 'Checking API connectivity...'; try { $response = Invoke-WebRequest -Uri 'http://localhost:5002/api/health' -UseBasicParsing; Write-Host \"API is accessible: $($response.StatusCode)\"; $responseContent = $response.Content | ConvertFrom-Json; Write-Host \"API Environment: $($responseContent.environment), HTTP Port: $($responseContent.httpPort)\"; } catch { Write-Host \"Error connecting to API: $_\" -ForegroundColor Red; }"
+            ],
             "problemMatcher": []
         }
     ]

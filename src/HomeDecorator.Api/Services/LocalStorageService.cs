@@ -26,7 +26,17 @@ public class LocalStorageService : IStorageService
     {
         try
         {
-            _logger.LogInformation("Downloading image from: {ImageUrl}", imageUrl);
+            _logger.LogInformation("Downloading image from URL: {ImageUrl}", imageUrl);
+
+            // Log if the URL is valid
+            if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out Uri? uri))
+            {
+                _logger.LogError("Invalid URL provided: {ImageUrl}", imageUrl);
+                throw new ArgumentException($"Invalid URL format: {imageUrl}");
+            }
+
+            _logger.LogInformation("URL scheme: {Scheme}, Host: {Host}, Path: {Path}",
+                uri.Scheme, uri.Host, uri.AbsolutePath);
 
             // Ensure the category directory exists
             var categoryPath = Path.Combine(_storageRoot, category);
@@ -52,7 +62,30 @@ public class LocalStorageService : IStorageService
                     client.Timeout = TimeSpan.FromSeconds(30);
 
                     // Download image
+                    _logger.LogInformation("Sending HTTP request to: {ImageUrl}", imageUrl);
                     var response = await client.GetAsync(imageUrl);
+
+                    _logger.LogInformation("Received HTTP response: Status {StatusCode} - {ReasonPhrase}",
+                        (int)response.StatusCode, response.ReasonPhrase);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        _logger.LogError("HTTP request failed with status code {StatusCode}: {ReasonPhrase}",
+                            (int)response.StatusCode, response.ReasonPhrase);
+
+                        // Try to get response content if available
+                        try
+                        {
+                            var errorContent = await response.Content.ReadAsStringAsync();
+                            _logger.LogError("Error response content: {ErrorContent}",
+                                errorContent.Length > 1000 ? errorContent.Substring(0, 1000) + "..." : errorContent);
+                        }
+                        catch (Exception contentEx)
+                        {
+                            _logger.LogWarning("Could not read error content: {Error}", contentEx.Message);
+                        }
+                    }
+
                     response.EnsureSuccessStatusCode();
 
                     // Read as byte array to avoid stream issues

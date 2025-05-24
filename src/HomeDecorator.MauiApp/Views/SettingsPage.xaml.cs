@@ -18,16 +18,14 @@ public partial class SettingsPage : ContentPage
     }
     private async void OnFakeDataToggled(object sender, ToggledEventArgs e)
     {
-        bool enabled = e.Value;
-
-        try
+        bool enabled = e.Value; try
         {            // Call the API to update the feature flag
             var httpClient = new HttpClient();
             string baseUrl = DeviceInfo.Platform == DevicePlatform.Android
-                ? "https://10.0.2.2:7072" // Android emulator uses this IP for localhost
-                : "https://localhost:7072";
+                ? "http://10.0.2.2:5002" // Android emulator uses this IP for localhost
+                : "http://localhost:5002"; // Use HTTP to match API configuration
 
-            // We need to handle SSL certificate issues in development
+            // Use the same handler as ApiService for consistency
             var handler = new HttpClientHandler
             {
                 ServerCertificateCustomValidationCallback = (_, _, _, _) => true // Accept all certificates

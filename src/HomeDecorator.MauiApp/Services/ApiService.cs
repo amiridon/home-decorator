@@ -27,12 +27,16 @@ namespace HomeDecorator.MauiApp.Services
             _baseUrl = "https://your-api-url.com";
 
 #if DEBUG
-            // For local development use localhost - using HTTP since API runs on HTTP in development
+            // For local development - use HTTP to match API configuration (no HTTPS redirect in dev)
             _baseUrl = DeviceInfo.Platform == DevicePlatform.Android
                 ? "http://10.0.2.2:5002" // Android emulator uses this IP for localhost
                 : "http://localhost:5002";
 
             Console.WriteLine($"API base URL set to: {_baseUrl}");
+
+            // Enable detailed logging for network requests in debug mode
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", "HomeDecorator-MauiApp/1.0");
+            _httpClient.DefaultRequestHeaders.Add("X-Debug", "true");
 #endif
         }
 
@@ -120,14 +124,39 @@ namespace HomeDecorator.MauiApp.Services
 
             while (attempts < maxRetries)
             {
-                attempts++;
-                try
+                attempts++; try
                 {
+                    // Validate and normalize the URL before sending
+                    string normalizedUrl = originalImageUrl;
+
+                    try
+                    {
+                        var uri = new Uri(originalImageUrl);
+                        // Make sure we have http or https scheme
+                        if (uri.Scheme != "http" && uri.Scheme != "https")
+                        {
+                            throw new InvalidOperationException($"Invalid URL scheme: {uri.Scheme}. URL must start with http:// or https://");
+                        }
+                        // Use the normalized form of the URI
+                        normalizedUrl = uri.AbsoluteUri;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"URL validation failed: {ex.Message}");
+                        throw new ArgumentException($"Invalid image URL: {ex.Message}", nameof(originalImageUrl), ex);
+                    }
+
                     var request = new CreateImageRequestDto
                     {
-                        OriginalImageUrl = originalImageUrl,
+                        OriginalImageUrl = normalizedUrl,
                         Prompt = prompt
-                    }; Console.WriteLine($"Sending image request - attempt {attempts}, URL: {originalImageUrl}, Prompt: {prompt}");
+                    };
+
+                    // Enhanced logging for troubleshooting
+                    Console.WriteLine($"Sending image request - attempt {attempts}");
+                    Console.WriteLine($"Original image URL: {originalImageUrl}");
+                    Console.WriteLine($"Normalized URL: {normalizedUrl}");
+                    Console.WriteLine($"Prompt: {prompt}");
                     Console.WriteLine($"API endpoint: {_baseUrl}/api/image-request");
 
                     var response = await _httpClient.PostAsJsonAsync($"{_baseUrl}/api/image-request", request);
@@ -251,10 +280,28 @@ namespace HomeDecorator.MauiApp.Services
 
                 streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
                 content.Add(streamContent, "file", fileName); Console.WriteLine($"Uploading image: {fileName}, size: {memoryStream.Length} bytes, to URL: {_baseUrl}/api/upload-image");
-                Console.WriteLine($"Content type: {contentType}");
-
-                // Ensure stream is readable and positioned at the beginning
+                Console.WriteLine($"Content type: {contentType}");                // Ensure stream is readable and positioned at the beginning
                 memoryStream.Position = 0;
+
+                // Add a health check request first to test connectivity
+                try
+                {
+                    Console.WriteLine("Checking API health before upload...");
+                    var healthResponse = await _httpClient.GetAsync($"{_baseUrl}/api/ping-image-service");
+                    if (healthResponse.IsSuccessStatusCode)
+                    {
+                        Console.WriteLine("API health check successful");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"API health check failed with status {healthResponse.StatusCode}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"API health check failed: {ex.Message}");
+                    // Continue anyway, as this is just diagnostic
+                }
 
                 var response = await _httpClient.PostAsync($"{_baseUrl}/api/upload-image", content);
 

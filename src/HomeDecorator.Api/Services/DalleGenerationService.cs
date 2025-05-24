@@ -3,6 +3,7 @@ using OpenAI;
 using OpenAI.Images;
 using System.Net.Http;
 using System.Reflection;
+using Microsoft.Extensions.Logging.Console;
 
 namespace HomeDecorator.Api.Services;
 
@@ -16,8 +17,7 @@ public class DalleGenerationService : IGenerationService
     private readonly ILogger<DalleGenerationService> _logger;
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
-
-    public DalleGenerationService(
+    private readonly DirectImageDownloader _directImageDownloader; public DalleGenerationService(
         IConfiguration configuration,
         IStorageService storageService,
         ILogger<DalleGenerationService> logger)
@@ -65,6 +65,10 @@ public class DalleGenerationService : IGenerationService
             ServerCertificateCustomValidationCallback =
                 HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
         });
+        // Create a logger factory to get the right type of logger for DirectImageDownloader
+        var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+        var downloaderLogger = loggerFactory.CreateLogger<DirectImageDownloader>();
+        _directImageDownloader = new DirectImageDownloader(downloaderLogger, storageService);
     }
 
     public async Task<string> GenerateImageAsync(string originalImageUrl, string prompt, string decorStyle)
@@ -137,7 +141,8 @@ public class DalleGenerationService : IGenerationService
                     _logger.LogInformation("Calling DALL-E 2 API with image variation request");
 
                     try
-                    {                        // Create image variation using the file path
+                    {
+                        _logger.LogDebug("Calling GenerateImageVariationAsync with file: {FilePath}", tempImagePath);
                         var response = await imageClient.GenerateImageVariationAsync(tempImagePath);
 
                         _logger.LogInformation("Successfully received DALL-E 2 API response");
@@ -147,24 +152,87 @@ public class DalleGenerationService : IGenerationService
                         {
                             _logger.LogError("DALL-E API returned null response");
                             throw new InvalidOperationException("DALL-E API returned null response");
-                        }                        // Inspect the generated image object to find the URL
+                        }
+                        // Inspect the generated image object to find the URL
                         var generatedImage = response.Value;
 
                         // Log all available properties for debugging
                         _logger.LogInformation("Generated image type: {Type}", generatedImage.GetType().Name);
 
-                        // Try to extract URL from different potential properties
+                        // Log all properties available on the generated image
+                        var properties = generatedImage.GetType().GetProperties();
+                        foreach (var prop in properties)
+                        {
+                            try
+                            {
+                                var value = prop.GetValue(generatedImage);
+                                _logger.LogInformation("Property: {PropertyName}, Value: {PropertyValue}",
+                                    prop.Name, value?.ToString() ?? "null");
+                            }
+                            catch (Exception propEx)
+                            {
+                                _logger.LogWarning("Error accessing property {PropertyName}: {Error}",
+                                    prop.Name, propEx.Message);
+                            }
+                        }
+
+                        // DALL-E 2 variations likely return raw binary data or a direct URL 
+                        // Let's handle multiple possibilities to extract the URL
                         string? generatedImageUrl = null;
 
-                        // Try to use reflection to find the URL property
-                        var urlProperty = generatedImage.GetType().GetProperty("Url") ??
-                                          generatedImage.GetType().GetProperty("Uri") ??
-                                          generatedImage.GetType().GetProperty("ImageUrl");
+                        // Try common property names that could hold the URL
+                        var commonProperties = new[] { "Url", "Uri", "ImageUrl", "Image" };
 
-                        if (urlProperty != null)
+                        foreach (var propName in commonProperties)
                         {
-                            var urlValue = urlProperty.GetValue(generatedImage);
-                            generatedImageUrl = urlValue?.ToString();
+                            var prop = generatedImage.GetType().GetProperty(propName);
+                            if (prop != null)
+                            {
+                                var value = prop.GetValue(generatedImage);
+                                if (value != null)
+                                {
+                                    generatedImageUrl = value.ToString();
+                                    _logger.LogInformation("Found URL via property {PropertyName}: {Url}",
+                                        propName, generatedImageUrl);
+                                    break;
+                                }
+                            }
+                        }
+
+                        // If no URL property found, check if the image object itself has byte data
+                        if (string.IsNullOrEmpty(generatedImageUrl))
+                        {
+                            var dataProp = generatedImage.GetType().GetProperty("Data") ??
+                                           generatedImage.GetType().GetProperty("Bytes") ??
+                                           generatedImage.GetType().GetProperty("ImageData");
+
+                            if (dataProp != null)
+                            {
+                                var imageData = dataProp.GetValue(generatedImage);
+                                if (imageData != null)
+                                {
+                                    // If we have binary data, save it directly and create a local URL
+                                    _logger.LogInformation("Found image data in property {PropertyName}", dataProp.Name);
+
+                                    // Create unique filename for the image
+                                    string tempOutputPath = Path.Combine(Path.GetTempPath(), $"dalle_output_{Guid.NewGuid()}.png");
+
+                                    if (imageData is byte[] bytes)
+                                    {
+                                        await File.WriteAllBytesAsync(tempOutputPath, bytes);
+
+                                        // Upload directly to storage
+                                        using (var fileStream = File.OpenRead(tempOutputPath))
+                                        {
+                                            var storedImageUrl = await _storageService.StoreImageFromStreamAsync(
+                                                fileStream,
+                                                $"dalle_output_{Guid.NewGuid()}.png",
+                                                "generated");
+                                            return storedImageUrl;
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         // If we couldn't find a URL property, try to use ToString() on the image itself
@@ -180,13 +248,19 @@ public class DalleGenerationService : IGenerationService
                         }
                         _logger.LogInformation("DALL-E 2 generated image URL: {ImageUrl}", generatedImageUrl);
 
-                        // Download and store the image permanently
-                        var storedImageUrl = await _storageService.StoreImageFromUrlAsync(
+                        // Test if the URL is accessible before trying to download it
+                        var isUrlAccessible = await CanAccessUrl(generatedImageUrl);
+                        if (!isUrlAccessible)
+                        {
+                            _logger.LogError("DALL-E generated image URL is not accessible: {ImageUrl}", generatedImageUrl);
+                            throw new InvalidOperationException($"Generated image URL is not accessible: {generatedImageUrl}");
+                        }                        // Download and store the image permanently
+                        var finalStoredImageUrl = await _storageService.StoreImageFromUrlAsync(
                             generatedImageUrl,
                             "generated");
 
-                        _logger.LogInformation("Image stored successfully at: {StoredUrl}", storedImageUrl);
-                        return storedImageUrl;
+                        _logger.LogInformation("Image stored successfully at: {StoredUrl}", finalStoredImageUrl);
+                        return finalStoredImageUrl;
                     }
                     catch (HttpRequestException ex) when (ex.Message.Contains("401"))
                     {
@@ -294,6 +368,32 @@ public class DalleGenerationService : IGenerationService
         catch (Exception ex)
         {
             logger.LogError(ex, "Error while logging configuration keys");
+        }
+    }
+
+    // Helper method for debugging the image URL access
+    private async Task<bool> CanAccessUrl(string url)
+    {
+        try
+        {
+            _logger.LogInformation("Testing accessibility of URL: {Url}", url);
+
+            using var client = new HttpClient();
+            client.Timeout = TimeSpan.FromSeconds(10);
+
+            // Use HEAD request to minimize data transfer
+            var request = new HttpRequestMessage(HttpMethod.Head, url);
+            var response = await client.SendAsync(request);
+
+            _logger.LogInformation("URL test result: {StatusCode} - {ReasonPhrase}",
+                (int)response.StatusCode, response.ReasonPhrase);
+
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error accessing URL: {Url}, Error: {Message}", url, ex.Message);
+            return false;
         }
     }
 

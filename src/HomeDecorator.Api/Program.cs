@@ -25,9 +25,25 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("MauiAppPolicy", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        if (builder.Environment.IsDevelopment())
+        {
+            // In development, allow localhost and local IPs
+            policy.WithOrigins(
+                "http://localhost:*",
+                "https://localhost:*",
+                "http://10.0.2.2:*",
+                "https://10.0.2.2:*")
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .SetIsOriginAllowedToAllowWildcardSubdomains();
+        }
+        else
+        {
+            // In production, specify exact origins
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        }
     });
 });
 
@@ -91,7 +107,12 @@ app.UseCors("MauiAppPolicy");
 // Serve static files (for locally stored images)
 app.UseStaticFiles();
 
-app.UseHttpsRedirection();
+// Only use HTTPS redirection in production, not in development
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -158,6 +179,22 @@ app.MapBillingEndpoints();
 
 // Image generation endpoints
 app.MapImageGenerationEndpoints();
+
+// Add diagnostic endpoint for checking API health
+app.MapGet("/api/health", (HttpContext context) =>
+{
+    var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    return Results.Ok(new
+    {
+        status = "healthy",
+        timestamp = DateTime.UtcNow,
+        clientIp = clientIp,
+        environment = app.Environment.EnvironmentName,
+        httpPort = 5002,
+        httpsPort = 7072
+    });
+})
+.WithName("ApiHealth");
 
 // Test DALL-E 2 image variations endpoint (for development only)
 app.MapGet("/api/test-dalle-variations", async (

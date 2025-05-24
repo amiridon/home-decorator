@@ -56,16 +56,53 @@ public static class ImageGenerationEndpoints
         .WithName("UploadImage")
         .WithTags("Image Generation")
         .WithOpenApi()
-        .DisableAntiforgery(); // Required for file uploads
-
-        // Create a new image generation request
+        .DisableAntiforgery(); // Required for file uploads        // Create a new image generation request
         app.MapPost("/api/image-request", async (
             CreateImageRequestDto request,
             ImageGenerationOrchestrator orchestrator,
+            ILogger<Program> logger,
             HttpContext context) =>
         {
             try
             {
+                // Validate the request more explicitly
+                if (request == null)
+                {
+                    logger.LogWarning("Bad request: request body is null");
+                    return Results.BadRequest(new { error = "Request body is required" });
+                }
+
+                if (string.IsNullOrEmpty(request.OriginalImageUrl))
+                {
+                    logger.LogWarning("Bad request: originalImageUrl is null or empty");
+                    return Results.BadRequest(new { error = "Original image URL is required" });
+                }
+
+                if (string.IsNullOrEmpty(request.Prompt))
+                {
+                    logger.LogWarning("Bad request: prompt is null or empty");
+                    return Results.BadRequest(new { error = "Prompt is required" });
+                }
+
+                // Try to validate URL format
+                try
+                {
+                    var uri = new Uri(request.OriginalImageUrl);
+                    if (uri.Scheme != "http" && uri.Scheme != "https")
+                    {
+                        logger.LogWarning("Bad request: invalid URL scheme: {Scheme}", uri.Scheme);
+                        return Results.BadRequest(new { error = $"Invalid URL scheme: {uri.Scheme}. Only http:// and https:// URLs are supported." });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Bad request: invalid image URL: {Url}", request.OriginalImageUrl);
+                    return Results.BadRequest(new { error = $"Invalid image URL format: {ex.Message}" });
+                }
+
+                logger.LogInformation("Processing image request: URL={OriginalImageUrl}, Prompt={Prompt}",
+                    request.OriginalImageUrl, request.Prompt);
+
                 // In a real app, get userId from authenticated user
                 var userId = context.User?.Identity?.Name ?? "test-user";
 
@@ -210,7 +247,27 @@ public static class ImageGenerationEndpoints
         })        // .RequireAuthorization() // Temporarily disabled for development testing
         .WithName("GetHistory")
         .WithTags("Image Generation")
-        .WithOpenApi();        // Test endpoint for debugging DALL-E generation
+        .WithOpenApi();
+
+        // Simple test endpoint for diagnosing API connectivity and port issues
+        app.MapGet("/api/ping-image-service", (
+            IGenerationService generationService,
+            ILogger<Program> logger) =>
+        {
+            logger.LogInformation("Image service ping received");
+
+            return Results.Ok(new
+            {
+                status = "ok",
+                timestamp = DateTime.UtcNow,
+                serviceType = generationService.GetType().Name
+            });
+        })
+        .WithName("PingImageService")
+        .WithTags("Image Generation")
+        .WithOpenApi();
+
+        // Test endpoint for debugging DALL-E generation
         app.MapGet("/api/test-dalle", async (
             IGenerationService generationService,
             ILogger<Program> logger,
