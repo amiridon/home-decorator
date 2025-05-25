@@ -57,17 +57,19 @@ builder.Services.AddScoped<IStorageService, LocalStorageService>();
 builder.Services.AddScoped<ICreditLedgerService, SqliteCreditLedgerService>();
 builder.Services.AddScoped<IImageRequestRepository, SqliteImageRequestRepository>();
 builder.Services.AddScoped<IGenerationService, DalleGenerationService>();
-builder.Services.AddScoped<ImageProcessingService>();
+builder.Services.AddScoped<ImageProcessingServiceNew>();
+builder.Services.AddScoped<IProductMatcherService, MockProductMatcherService>();
+builder.Services.AddScoped<ImageGenerationOrchestrator>();
 
 // Register billing service
 Console.WriteLine("Using Stripe billing service");
-builder.Services.AddSingleton<IBillingService, StripeService>();
+builder.Services.AddScoped<IBillingService, StripeService>();  // Changed from singleton to scoped
 
 // Register test service for DALL-E 2 variations
-builder.Services.AddSingleton<TestDalleVariationService>();
+builder.Services.AddScoped<TestDalleVariationService>();  // Changed from singleton to scoped because it uses IGenerationService
 
 // Register log service for request logs
-builder.Services.AddSingleton<ILogService, SqliteLogService>();
+builder.Services.AddScoped<ILogService, SqliteLogService>();  // Changed from singleton to scoped for consistency
 
 // Register HttpClient for services that need it
 builder.Services.AddHttpClient();
@@ -182,6 +184,7 @@ app.MapBillingEndpoints();
 
 // Image generation endpoints
 app.MapImageGenerationEndpoints();
+app.MapImageProcessingTestEndpoints(); // Add test endpoints
 
 // Add diagnostic endpoint for checking API health
 app.MapGet("/api/health", (HttpContext context) =>

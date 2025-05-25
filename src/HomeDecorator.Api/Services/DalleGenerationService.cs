@@ -20,13 +20,13 @@ public class DalleGenerationService : IGenerationService
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
     private readonly DirectImageDownloader _directImageDownloader;
-    private readonly ImageProcessingService _imageProcessingService;
+    private readonly ImageProcessingServiceNew _imageProcessingService;
 
     public DalleGenerationService(
         IConfiguration configuration,
         IStorageService storageService,
         ILogger<DalleGenerationService> logger,
-        ImageProcessingService imageProcessingService)
+        ImageProcessingServiceNew imageProcessingService)
     {
         _configuration = configuration;
         _imageProcessingService = imageProcessingService;
@@ -82,7 +82,7 @@ public class DalleGenerationService : IGenerationService
     {
         try
         {
-            _logger.LogInformation("Starting DALL-E 2 image variation generation for image: {OriginalImage}, decor style: {DecorStyle}", originalImageUrl, decorStyle);
+            _logger.LogInformation("Starting GPT-4o image variation generation for image: {OriginalImage}, decor style: {DecorStyle}", originalImageUrl, decorStyle);
 
             // Log the prompt for context, even though we won't use it directly with the image variation API
             if (!string.IsNullOrEmpty(prompt))
@@ -132,226 +132,106 @@ public class DalleGenerationService : IGenerationService
             }
             try
             {
-                // Process the image to ensure it meets DALL-E API requirements (PNG format, < 4MB)
+                // Process the image to ensure it meets API requirements (PNG format, < 4MB)
                 string tempImagePath = await _imageProcessingService.EnsureImageMeetsDalleRequirements(originalImageBytes);
-                _logger.LogInformation("Image processed and ready for DALL-E API: {TempPath}", tempImagePath);
+                _logger.LogInformation("Image processed and ready for GPT-4o Image API: {TempPath}", tempImagePath);
 
                 try
                 {
-                    // Initialize the ImageClient with DALL-E 2 model
-                    var imageClient = _openAIClient.GetImageClient("dall-e-2");
+                    // Instead of using the OpenAI SDK, call the OpenAI Images API directly for GPT-4o image variation
+                    var openAiApiKey = apiKey;
+                    var endpoint = "https://api.openai.com/v1/images/variations";
 
-                    _logger.LogInformation("Calling DALL-E 2 API with image variation request");
-
-                    try
+                    using (var multipartContent = new MultipartFormDataContent())
                     {
-                        _logger.LogDebug("Calling GenerateImageVariationAsync with file: {FilePath}", tempImagePath);
-                        var response = await imageClient.GenerateImageVariationAsync(tempImagePath);
+                        multipartContent.Add(new StreamContent(File.OpenRead(tempImagePath)), "image", Path.GetFileName(tempImagePath));
+                        // Optionally add prompt if needed for GPT-4o (for variations, prompt may not be required)
+                        // multipartContent.Add(new StringContent(prompt), "prompt");
 
-                        _logger.LogInformation("Successfully received DALL-E 2 API response");
-
-                        // Get the generated image from the response
-                        if (response == null || response.Value == null)
+                        using (var request = new HttpRequestMessage(HttpMethod.Post, endpoint))
                         {
-                            _logger.LogError("DALL-E API returned null response");
-                            throw new InvalidOperationException("DALL-E API returned null response");
-                        }
-                        // Inspect the generated image object to find the URL
-                        var generatedImage = response.Value;
+                            request.Headers.Add("Authorization", $"Bearer {openAiApiKey}");
+                            request.Content = multipartContent;
 
-                        // Log all available properties for debugging
-                        _logger.LogInformation("Generated image type: {Type}", generatedImage.GetType().Name);
-
-                        // Log all properties available on the generated image
-                        var properties = generatedImage.GetType().GetProperties();
-                        foreach (var prop in properties)
-                        {
-                            try
+                            using (var response = await _httpClient.SendAsync(request))
                             {
-                                var value = prop.GetValue(generatedImage);
-                                _logger.LogInformation("Property: {PropertyName}, Value: {PropertyValue}",
-                                    prop.Name, value?.ToString() ?? "null");
-                            }
-                            catch (Exception propEx)
-                            {
-                                _logger.LogWarning("Error accessing property {PropertyName}: {Error}",
-                                    prop.Name, propEx.Message);
-                            }
-                        }
-
-                        // DALL-E 2 variations likely return raw binary data or a direct URL 
-                        // Let's handle multiple possibilities to extract the URL
-                        string? generatedImageUrl = null;
-
-                        // Try common property names that could hold the URL
-                        var commonProperties = new[] { "Url", "Uri", "ImageUrl", "Image" };
-
-                        foreach (var propName in commonProperties)
-                        {
-                            var prop = generatedImage.GetType().GetProperty(propName);
-                            if (prop != null)
-                            {
-                                var value = prop.GetValue(generatedImage);
-                                if (value != null)
+                                if (!response.IsSuccessStatusCode)
                                 {
-                                    generatedImageUrl = value.ToString();
-                                    _logger.LogInformation("Found URL via property {PropertyName}: {Url}",
-                                        propName, generatedImageUrl);
-                                    break;
+                                    var errorContent = await response.Content.ReadAsStringAsync();
+                                    _logger.LogError("OpenAI Images API error: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                                    throw new InvalidOperationException($"OpenAI Images API error: {response.StatusCode} - {errorContent}");
                                 }
-                            }
-                        }
-
-                        // If no URL property found, check if the image object itself has byte data
-                        if (string.IsNullOrEmpty(generatedImageUrl))
-                        {
-                            var dataProp = generatedImage.GetType().GetProperty("Data") ??
-                                           generatedImage.GetType().GetProperty("Bytes") ??
-                                           generatedImage.GetType().GetProperty("ImageData");
-
-                            if (dataProp != null)
-                            {
-                                var imageData = dataProp.GetValue(generatedImage);
-                                if (imageData != null)
+                                var json = await response.Content.ReadAsStringAsync();
+                                // Parse the response to extract the image URL
+                                var imageUrl = System.Text.Json.JsonDocument.Parse(json)
+                                    .RootElement.GetProperty("data")[0].GetProperty("url").GetString();
+                                if (string.IsNullOrEmpty(imageUrl))
                                 {
-                                    // If we have binary data, save it directly and create a local URL
-                                    _logger.LogInformation("Found image data in property {PropertyName}", dataProp.Name);
-
-                                    // Create unique filename for the image
-                                    string tempOutputPath = Path.Combine(Path.GetTempPath(), $"dalle_output_{Guid.NewGuid()}.png");
-
-                                    if (imageData is byte[] bytes)
-                                    {
-                                        await File.WriteAllBytesAsync(tempOutputPath, bytes);
-
-                                        // Upload directly to storage
-                                        using (var fileStream = File.OpenRead(tempOutputPath))
-                                        {
-                                            var storedImageUrl = await _storageService.StoreImageFromStreamAsync(
-                                                fileStream,
-                                                $"dalle_output_{Guid.NewGuid()}.png",
-                                                "generated");
-                                            return storedImageUrl;
-                                        }
-                                    }
+                                    _logger.LogError("No image URL found in OpenAI Images API response: {Json}", json);
+                                    throw new InvalidOperationException("No image URL found in OpenAI Images API response.");
                                 }
+                                _logger.LogInformation("GPT-4o generated image URL: {ImageUrl}", imageUrl);
+                                // Download and store the image as before
+                                var isUrlAccessible = await CanAccessUrl(imageUrl);
+                                if (!isUrlAccessible)
+                                {
+                                    _logger.LogError("GPT-4o generated image URL is not accessible: {ImageUrl}", imageUrl);
+                                    throw new InvalidOperationException($"Generated image URL is not accessible: {imageUrl}");
+                                }
+                                using var httpClient = new HttpClient();
+                                httpClient.Timeout = TimeSpan.FromSeconds(30);
+                                _logger.LogInformation("Downloading image from URL: {ImageUrl}", imageUrl);
+                                byte[] imageBytes = await httpClient.GetByteArrayAsync(imageUrl);
+                                _logger.LogInformation("Successfully downloaded {BytesLength} bytes", imageBytes.Length);
+                                string tempFile = Path.Combine(Path.GetTempPath(), $"gpt4o_download_{Guid.NewGuid()}.png");
+                                await File.WriteAllBytesAsync(tempFile, imageBytes);
+                                using var fileStream = File.OpenRead(tempFile);
+                                var finalStoredImageUrl = await _storageService.StoreImageFromStreamAsync(
+                                    fileStream,
+                                    $"gpt4o_generated_{Guid.NewGuid()}.png",
+                                    "generated");
+                                _logger.LogInformation("Image stored successfully at: {StoredUrl}", finalStoredImageUrl);
+                                try { File.Delete(tempFile); } catch (Exception ex) { _logger.LogWarning(ex, "Failed to delete temp file: {TempFile}", tempFile); }
+                                return finalStoredImageUrl;
                             }
                         }
-
-                        // If we couldn't find a URL property, try to use ToString() on the image itself
-                        if (string.IsNullOrEmpty(generatedImageUrl))
-                        {
-                            generatedImageUrl = generatedImage.ToString();
-                        }
-
-                        if (string.IsNullOrEmpty(generatedImageUrl))
-                        {
-                            _logger.LogError("DALL-E API returned null or empty image URL");
-                            throw new InvalidOperationException("DALL-E API returned null or empty image URL");
-                        }
-                        _logger.LogInformation("DALL-E 2 generated image URL: {ImageUrl}", generatedImageUrl);
-
-                        // Test if the URL is accessible before trying to download it
-                        var isUrlAccessible = await CanAccessUrl(generatedImageUrl);
-                        if (!isUrlAccessible)
-                        {
-                            _logger.LogError("DALL-E generated image URL is not accessible: {ImageUrl}", generatedImageUrl);
-                            throw new InvalidOperationException($"Generated image URL is not accessible: {generatedImageUrl}");
-                        }                        // Download and store the image permanently
-                        try
-                        {
-                            // First download the image bytes
-                            using var httpClient = new HttpClient();
-                            httpClient.Timeout = TimeSpan.FromSeconds(30);
-
-                            _logger.LogInformation("Downloading image from URL: {ImageUrl}", generatedImageUrl);
-                            byte[] imageBytes = await httpClient.GetByteArrayAsync(generatedImageUrl);
-                            _logger.LogInformation("Successfully downloaded {BytesLength} bytes", imageBytes.Length);
-
-                            // Save to a temporary file
-                            string tempFile = Path.Combine(Path.GetTempPath(), $"dalle_download_{Guid.NewGuid()}.png");
-                            await File.WriteAllBytesAsync(tempFile, imageBytes);
-
-                            // Store using stream method instead of URL
-                            using var fileStream = File.OpenRead(tempFile);
-                            var finalStoredImageUrl = await _storageService.StoreImageFromStreamAsync(
-                                fileStream,
-                                $"dalle_generated_{Guid.NewGuid()}.png",
-                                "generated");
-
-                            _logger.LogInformation("Image stored successfully at: {StoredUrl}", finalStoredImageUrl);
-
-                            // Clean up temp file
-                            try
-                            {
-                                File.Delete(tempFile);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogWarning(ex, "Failed to delete temp file: {TempFile}", tempFile);
-                            }
-
-                            return finalStoredImageUrl;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "Error downloading and storing image: {Message}", ex.Message);
-                            throw new InvalidOperationException($"Failed to download and store image: {ex.Message}", ex);
-                        }
-                    }
-                    catch (HttpRequestException ex) when (ex.Message.Contains("401"))
-                    {
-                        _logger.LogError(ex, "DALL-E API authentication failed (401 Unauthorized): {Message}", ex.Message);
-                        throw new InvalidOperationException("DALL-E API authentication failed. Please check your API key.", ex);
-                    }
-                    catch (HttpRequestException ex) when (ex.Message.Contains("429"))
-                    {
-                        _logger.LogError(ex, "DALL-E API rate limit exceeded (429 Too Many Requests): {Message}", ex.Message);
-                        throw new InvalidOperationException("DALL-E API rate limit exceeded or insufficient quota. Please check your billing status.", ex);
-                    }
-                    catch (HttpRequestException ex) when (ex.Message.Contains("400"))
-                    {
-                        _logger.LogError(ex, "DALL-E API rejected the request (400 Bad Request): {Message}", ex.Message);
-                        throw new InvalidOperationException($"DALL-E API rejected the request: {ex.Message}", ex);
-                    }
-                    catch (HttpRequestException ex) when (ex.Message.Contains("500"))
-                    {
-                        _logger.LogError(ex, "DALL-E API server error (500 Internal Server Error): {Message}", ex.Message);
-                        throw new InvalidOperationException($"DALL-E API server error: {ex.Message}", ex);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Unknown error calling DALL-E API: {Message}", ex.Message);
-                        throw new InvalidOperationException($"Error calling DALL-E API: {ex.Message}", ex);
                     }
                 }
-                finally
+                catch (HttpRequestException ex) when (ex.Message.Contains("401"))
                 {
-                    // Clean up the temporary file regardless of success or failure
-                    try
-                    {
-                        if (File.Exists(tempImagePath))
-                        {
-                            File.Delete(tempImagePath);
-                            _logger.LogInformation("Deleted temporary file: {TempPath}", tempImagePath);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to delete temporary file: {TempPath}", tempImagePath);
-                        // Don't throw here as this is just cleanup
-                    }
+                    _logger.LogError(ex, "DALL-E API authentication failed (401 Unauthorized): {Message}", ex.Message);
+                    throw new InvalidOperationException("DALL-E API authentication failed. Please check your API key.", ex);
+                }
+                catch (HttpRequestException ex) when (ex.Message.Contains("429"))
+                {
+                    _logger.LogError(ex, "DALL-E API rate limit exceeded (429 Too Many Requests): {Message}", ex.Message);
+                    throw new InvalidOperationException("DALL-E API rate limit exceeded or insufficient quota. Please check your billing status.", ex);
+                }
+                catch (HttpRequestException ex) when (ex.Message.Contains("400"))
+                {
+                    _logger.LogError(ex, "DALL-E API rejected the request (400 Bad Request): {Message}", ex.Message);
+                    throw new InvalidOperationException($"DALL-E API rejected the request: {ex.Message}", ex);
+                }
+                catch (HttpRequestException ex) when (ex.Message.Contains("500"))
+                {
+                    _logger.LogError(ex, "DALL-E API server error (500 Internal Server Error): {Message}", ex.Message);
+                    throw new InvalidOperationException($"DALL-E API server error: {ex.Message}", ex);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Unknown error calling DALL-E API: {Message}", ex.Message);
+                    throw new InvalidOperationException($"Error calling DALL-E API: {ex.Message}", ex);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "DALL-E API call failed with error: {Message}", ex.Message);
-                throw new InvalidOperationException($"DALL-E API call failed: {ex.Message}", ex);
+                _logger.LogError(ex, "GPT-4o Image API call failed with error: {Message}", ex.Message);
+                throw new InvalidOperationException($"GPT-4o Image API call failed: {ex.Message}", ex);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating image with DALL-E: {ExceptionType} - {Message}",
+            _logger.LogError(ex, "Error generating image with GPT-4o: {ExceptionType} - {Message}",
                 ex.GetType().Name, ex.Message);
             throw;
         }
@@ -406,20 +286,39 @@ public class DalleGenerationService : IGenerationService
         {
             logger.LogError(ex, "Error while logging configuration keys");
         }
-    }
-
-    // Helper method for debugging the image URL access
+    }    // Helper method for debugging the image URL access
     private async Task<bool> CanAccessUrl(string url)
     {
         try
         {
+            // Validate the URL first
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                _logger.LogWarning("Cannot test accessibility: URL is null or empty");
+                return false;
+            }
+
+            // Check if the URL is a valid absolute URI
+            if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? validUri))
+            {
+                _logger.LogWarning("Cannot test accessibility: Invalid URL format: {Url}", url);
+                return false;
+            }
+
+            // Check if the scheme is HTTP or HTTPS
+            if (validUri.Scheme != Uri.UriSchemeHttp && validUri.Scheme != Uri.UriSchemeHttps)
+            {
+                _logger.LogWarning("Cannot test accessibility: URL must use HTTP or HTTPS scheme: {Url}", url);
+                return false;
+            }
+
             _logger.LogInformation("Testing accessibility of URL: {Url}", url);
 
             using var client = new HttpClient();
             client.Timeout = TimeSpan.FromSeconds(10);
 
             // Use HEAD request to minimize data transfer
-            var request = new HttpRequestMessage(HttpMethod.Head, url);
+            var request = new HttpRequestMessage(HttpMethod.Head, validUri);
             var response = await client.SendAsync(request);
 
             _logger.LogInformation("URL test result: {StatusCode} - {ReasonPhrase}",
@@ -444,5 +343,89 @@ public class DalleGenerationService : IGenerationService
                $"Focus the style changes on elements like wall decor, lighting, furniture, textiles, and accessories. " +
                $"The final image should look like a realistic, inviting, and professionally decorated space with appropriate lighting, color coordination, and high-end finishes for the '{decorStyle}' style. " +
                $"Use the provided image as a strong reference for the existing layout and architectural elements, updating only the decor and style as requested.";
+    }
+
+    // Helper method to comprehensively analyze GeneratedImage object structure
+    private void LogGeneratedImageStructure(object generatedImage)
+    {
+        try
+        {
+            var objectType = generatedImage.GetType();
+            _logger.LogInformation("=== DALL-E GeneratedImage Analysis ===");
+            _logger.LogInformation("Type: {TypeName}", objectType.FullName);
+
+            var properties = objectType.GetProperties();
+            _logger.LogInformation("Found {PropertyCount} properties:", properties.Length);
+
+            foreach (var prop in properties)
+            {
+                try
+                {
+                    var value = prop.GetValue(generatedImage);
+                    var valueType = value?.GetType()?.Name ?? "null";
+                    var valueDescription = GetValueDescription(value);
+
+                    _logger.LogInformation("  - {PropertyName} ({PropertyType}): {ValueType} = {ValueDescription}",
+                        prop.Name, prop.PropertyType.Name, valueType, valueDescription);
+
+                    // If this is a byte array, log its size
+                    if (value is byte[] bytes)
+                    {
+                        _logger.LogInformation("    -> Byte array with {ByteCount} bytes", bytes.Length);
+                    }
+                    // If this looks like a URL, log that
+                    else if (value is string str && (str.StartsWith("http://") || str.StartsWith("https://")))
+                    {
+                        _logger.LogInformation("    -> Detected as URL: {Url}", str);
+                    }
+                }
+                catch (Exception propEx)
+                {
+                    _logger.LogWarning("  - {PropertyName}: Error reading property: {Error}", prop.Name, propEx.Message);
+                }
+            }
+
+            // Also check for any fields (in case properties don't expose everything)
+            var fields = objectType.GetFields();
+            if (fields.Length > 0)
+            {
+                _logger.LogInformation("Found {FieldCount} fields:", fields.Length);
+                foreach (var field in fields)
+                {
+                    try
+                    {
+                        var value = field.GetValue(generatedImage);
+                        var valueDescription = GetValueDescription(value);
+                        _logger.LogInformation("  - {FieldName} ({FieldType}): {ValueDescription}",
+                            field.Name, field.FieldType.Name, valueDescription);
+                    }
+                    catch (Exception fieldEx)
+                    {
+                        _logger.LogWarning("  - {FieldName}: Error reading field: {Error}", field.Name, fieldEx.Message);
+                    }
+                }
+            }
+
+            _logger.LogInformation("=== End DALL-E GeneratedImage Analysis ===");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error analyzing GeneratedImage structure: {Message}", ex.Message);
+        }
+    }
+
+    private string GetValueDescription(object? value)
+    {
+        if (value == null) return "null";
+
+        if (value is byte[] bytes)
+            return $"byte[{bytes.Length}]";
+        if (value is string str)
+            return str.Length > 100 ? $"\"{str.Substring(0, 100)}...\"" : $"\"{str}\"";
+        if (value is Stream stream)
+            return $"Stream (CanRead: {stream.CanRead}, Length: {(stream.CanSeek ? stream.Length.ToString() : "unknown")})";
+
+        var stringValue = value.ToString();
+        return stringValue?.Length > 100 ? $"{stringValue.Substring(0, 100)}..." : stringValue ?? "null";
     }
 }

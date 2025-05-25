@@ -1,20 +1,22 @@
 using SkiaSharp;
-using System.Threading.Tasks;
+using System;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace HomeDecorator.Api.Services;
 
 /// <summary>
-/// Service for processing images to meet DALL-E API requirements
+/// Enhanced service for processing images to meet DALL-E API requirements
+/// with multiple strategies for size reduction and format handling
 /// </summary>
-public class ImageProcessingService
+public class ImageProcessingServiceNew
 {
-    private readonly ILogger<ImageProcessingService> _logger;
+    private readonly ILogger<ImageProcessingServiceNew> _logger;
     // DALL-E API requirements
     private const int MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
     private const int MAX_IMAGE_DIMENSION = 4096; // 4096px is a common limit
 
-    public ImageProcessingService(ILogger<ImageProcessingService> logger)
+    public ImageProcessingServiceNew(ILogger<ImageProcessingServiceNew> logger)
     {
         _logger = logger;
     }
@@ -37,9 +39,7 @@ public class ImageProcessingService
             string tempImagePath = Path.Combine(Path.GetTempPath(), $"dalle_input_{Guid.NewGuid()}.png");
 
             // Initial check if we need to process the image
-            bool needsProcessing = imageBytes.Length > MAX_FILE_SIZE;
-
-            using (var ms = new MemoryStream(imageBytes))
+            bool needsProcessing = imageBytes.Length > MAX_FILE_SIZE; using (var ms = new MemoryStream(imageBytes))
             {
                 // Load the image with SkiaSharp
                 using (var originalBitmap = SKBitmap.Decode(ms))
@@ -183,9 +183,6 @@ public class ImageProcessingService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing image for DALL-E API: {Message}", ex.Message);
-
-            // We can't access tempImagePath here since it's defined in the try block
-            // Just return the exception task directly
             return Task.FromException<string>(new InvalidOperationException($"Failed to process image for DALL-E API: {ex.Message}", ex));
         }
     }
