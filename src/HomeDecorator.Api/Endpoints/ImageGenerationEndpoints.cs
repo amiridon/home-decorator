@@ -106,15 +106,14 @@ public static class ImageGenerationEndpoints
                 // In a real app, get userId from authenticated user
                 var userId = context.User?.Identity?.Name ?? "test-user";
 
-                var imageRequest = await orchestrator.CreateAndProcessRequestAsync(userId, request);
-
-                var response = new ImageRequestResponseDto
+                var imageRequest = await orchestrator.CreateAndProcessRequestAsync(userId, request); var response = new ImageRequestResponseDto
                 {
                     Id = imageRequest.Id,
                     Status = imageRequest.Status,
                     OriginalImageUrl = imageRequest.OriginalImageUrl,
                     Prompt = imageRequest.Prompt,
                     CreditsCharged = imageRequest.CreditsCharged,
+                    UseMask = imageRequest.UseMask,
                     CreatedAt = imageRequest.CreatedAt
                 };
 
@@ -150,7 +149,6 @@ public static class ImageGenerationEndpoints
                 {
                     return Results.NotFound();
                 }
-
                 var response = new ImageRequestResponseDto
                 {
                     Id = imageRequest.Id,
@@ -159,6 +157,7 @@ public static class ImageGenerationEndpoints
                     OriginalImageUrl = imageRequest.OriginalImageUrl,
                     Prompt = imageRequest.Prompt,
                     CreditsCharged = imageRequest.CreditsCharged,
+                    UseMask = imageRequest.UseMask,
                     CreatedAt = imageRequest.CreatedAt,
                     CompletedAt = imageRequest.CompletedAt,
                     ErrorMessage = imageRequest.ErrorMessage
@@ -230,6 +229,7 @@ public static class ImageGenerationEndpoints
                     OriginalImageUrl = r.OriginalImageUrl,
                     Prompt = r.Prompt,
                     CreditsCharged = r.CreditsCharged,
+                    UseMask = r.UseMask,
                     CreatedAt = r.CreatedAt,
                     CompletedAt = r.CompletedAt,
                     ErrorMessage = r.ErrorMessage

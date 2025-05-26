@@ -1,5 +1,6 @@
 using HomeDecorator.Api.Endpoints;
 using HomeDecorator.Api.Services;
+using HomeDecorator.Api.Endpoints;
 using HomeDecorator.Core.Services;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Mvc;
@@ -59,6 +60,7 @@ builder.Services.AddScoped<IImageRequestRepository, SqliteImageRequestRepository
 builder.Services.AddScoped<IGenerationService, DalleGenerationService>();
 builder.Services.AddScoped<ImageProcessingServiceNew>();
 builder.Services.AddScoped<IProductMatcherService, MockProductMatcherService>();
+builder.Services.AddScoped<MaskGenerationService>();
 builder.Services.AddScoped<ImageGenerationOrchestrator>();
 
 // Register billing service
@@ -70,6 +72,9 @@ builder.Services.AddScoped<TestDalleVariationService>();  // Changed from single
 
 // Register log service for request logs
 builder.Services.AddScoped<ILogService, SqliteLogService>();  // Changed from singleton to scoped for consistency
+
+// Register memory cache for mask generation
+builder.Services.AddMemoryCache();
 
 // Register HttpClient for services that need it
 builder.Services.AddHttpClient();
@@ -185,6 +190,10 @@ app.MapBillingEndpoints();
 // Image generation endpoints
 app.MapImageGenerationEndpoints();
 app.MapImageProcessingTestEndpoints(); // Add test endpoints
+app.MapMaskGenerationEndpoints(); // Add mask generation endpoints
+
+// Add a route for the mask test page
+app.MapGet("/mask-test", () => Results.Redirect("/mask-test.html"));
 
 // Add diagnostic endpoint for checking API health
 app.MapGet("/api/health", (HttpContext context) =>

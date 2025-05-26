@@ -95,6 +95,7 @@ public class DalleGenerationService : IGenerationService
     }
     public async Task<string> GenerateImageEditAsync(
         System.IO.Stream imageStream, // PNG image stream
+        System.IO.Stream? maskStream, // optional PNG mask
         string prompt,
         string decorStyle)
     {
@@ -111,6 +112,13 @@ public class DalleGenerationService : IGenerationService
             throw new ArgumentException("Input image stream is not readable", nameof(imageStream));
         }
 
+        // Check if mask stream is readable when provided
+        if (maskStream != null && !maskStream.CanRead)
+        {
+            _logger.LogError("Mask stream is not readable");
+            throw new ArgumentException("Mask stream is not readable", nameof(maskStream));
+        }
+
         var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ??
             _configuration["DallE:ApiKey"] ??
             _configuration["OpenAI:ApiKey"];
@@ -121,7 +129,8 @@ public class DalleGenerationService : IGenerationService
         }
 
         // Log that we're about to start the generation process
-        _logger.LogInformation("Starting GPT-Image-1 edit generation with {Style} style", decorStyle);
+        string maskInfo = maskStream != null ? " with mask" : " without mask";
+        _logger.LogInformation("Starting GPT-Image-1 edit generation with {Style} style{MaskInfo}", decorStyle, maskInfo);
 
         var fullPrompt = BuildEnhancedPrompt(prompt, "", decorStyle);
 
@@ -136,6 +145,15 @@ public class DalleGenerationService : IGenerationService
         var imageContent = new StreamContent(imageStream);
         imageContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
         content.Add(imageContent, "image", "input.png");
+
+        // Add the mask if provided
+        if (maskStream != null)
+        {
+            _logger.LogInformation("Adding mask to GPT-Image-1 request");
+            var maskContent = new StreamContent(maskStream);
+            maskContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+            content.Add(maskContent, "mask", "mask.png");
+        }
 
         var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/images/edits");
         request.Headers.Add("Authorization", $"Bearer {apiKey}");
@@ -401,12 +419,16 @@ public class DalleGenerationService : IGenerationService
         _logger.LogInformation("Building enhanced prompt with style: {Style} and user prompt: {UserPrompt}",
             decorStyle, userPrompt);
 
-        var enhancedPrompt = $"Transform this interior/exterior home space into a beautiful, professionally designed version in a '{decorStyle}' style. " +
+        var enhancedPrompt = $"Transform this interior/exterior home space into a PHOTOREALISTIC, professionally designed version in a '{decorStyle}' style. " +
                $"The user's specific request is: '{userPrompt}'. " +
-               $"IMPORTANT: Maintain the original room shape, window positions, ceiling, and floor position. " +
-               $"Focus the style changes on elements like wall decor, lighting, furniture, textiles, and accessories. " +
-               $"The final image should look like a realistic, inviting, and professionally decorated space with appropriate lighting, color coordination, and high-end finishes for the '{decorStyle}' style. " +
-               $"Use the provided input image as a strong reference for the existing layout and architectural elements, updating only the decor and style as requested.";
+               $"CRITICALLY IMPORTANT: " +
+               $"1. Create a HIGHLY PHOTOREALISTIC result, not cartoon-like or illustrated. " +
+               $"2. Maintain the EXACT camera angle and perspective of the original photo. " +
+               $"3. Preserve the precise positions of all structural elements: walls, windows, doorways, ceiling, floor, columns, beams, and all architectural features. " +
+               $"4. Keep the exact same room dimensions and layout. " +
+               $"Focus style changes ONLY on elements like wall decor, lighting fixtures, furniture pieces, textiles, wall colors, and decorative accessories. " +
+               $"The final image should look like a professional architectural/interior design photograph with realistic lighting, natural shadows, proper perspective, and high-end finishes for the '{decorStyle}' style. " +
+               $"Use the provided input image as a precise reference for the existing space and architectural elements, updating only the decor and aesthetic elements as requested.";
 
         _logger.LogInformation("Final prompt (length: {Length}): {Prompt}", enhancedPrompt.Length, enhancedPrompt);
         return enhancedPrompt;

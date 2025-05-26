@@ -16,6 +16,7 @@ public class ImageGenerationOrchestrator
     private readonly IProductMatcherService _productMatcherService;
     private readonly ILogger<ImageGenerationOrchestrator> _logger;
     private readonly ILogService _logService; // replace ISqliteLogService with ILogService
+    private readonly MaskGenerationService _maskGenerationService;
 
     // Cost configuration - in a real app this would come from configuration
     private const int GENERATION_COST_CREDITS = 1;
@@ -26,7 +27,8 @@ public class ImageGenerationOrchestrator
         IBillingService billingService,
         IProductMatcherService productMatcherService,
         ILogger<ImageGenerationOrchestrator> logger,
-        ILogService logService) // Inject log service
+        ILogService logService, // Inject log service
+        MaskGenerationService maskGenerationService)
     {
         _generationService = generationService;
         _imageRequestRepository = imageRequestRepository;
@@ -34,6 +36,7 @@ public class ImageGenerationOrchestrator
         _productMatcherService = productMatcherService;
         _logger = logger;
         _logService = logService; // Initialize log service
+        _maskGenerationService = maskGenerationService;
     }
 
     /// <summary>
@@ -41,9 +44,7 @@ public class ImageGenerationOrchestrator
     /// </summary>
     public async Task<ImageRequest> CreateAndProcessRequestAsync(string userId, CreateImageRequestDto requestDto)
     {
-        _logger.LogInformation("Starting image generation request for user: {UserId}", userId);
-
-        // Create the request record
+        _logger.LogInformation("Starting image generation request for user: {UserId}", userId);        // Create the request record
         var imageRequest = new ImageRequest
         {
             UserId = userId,
@@ -51,6 +52,7 @@ public class ImageGenerationOrchestrator
             Prompt = requestDto.Prompt,
             CustomPrompt = requestDto.CustomPrompt,
             Status = "Pending",
+            UseMask = requestDto.UseMask, // Include mask generation flag from request
             CreditsCharged = GENERATION_COST_CREDITS
         };
 
@@ -205,61 +207,103 @@ public class ImageGenerationOrchestrator
                     await imageStream.CopyToAsync(pngMs);
                     pngMs.Position = 0;
                     _logger.LogInformation("Image is already PNG format, copied to memory stream, size: {Size} bytes", pngMs.Length);
-                }                // Call the new image-to-image edit method with the PNG stream
-                try
+                }                // Call the new image-to-image edit method with the PNG stream                try
                 {
+                    Stream? maskStream = null;
+
+                    // Check if mask should be generated
+                    if (request.UseMask)
+                    {
+                        _logger.LogInformation("Generating mask for image generation request {RequestId}", request.Id);
+                        _logService.Log(request.Id, "Information", "Generating mask to focus changes on furniture items");
+
+                        // Reset PNG stream position for reading
+                        pngMs.Position = 0;
+
+                        try
+                        {
+                            // Create a copy of the image stream for mask generation
+                            var pngMsCopy = new MemoryStream();
+                            await pngMs.CopyToAsync(pngMsCopy);
+                            pngMsCopy.Position = 0;
+
+                            // Generate mask - transparent areas (alpha=0) will be edited, white opaque areas will be preserved
+                            maskStream = await _maskGenerationService.GenerateMaskAsync(pngMsCopy);
+
+                            _logger.LogInformation("Successfully generated mask for request {RequestId}", request.Id);
+                            _logService.Log(request.Id, "Information", "Mask generated successfully");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error generating mask for request {RequestId}: {Error}", request.Id, ex.Message);
+                            _logService.Log(request.Id, "Warning", $"Mask generation failed, proceeding without mask: {ex.Message}");
+                            // Continue without a mask if generation fails
+                            maskStream = null;
+                        }
+                    }
+
+                    // Reset PNG stream position for reading
+                    pngMs.Position = 0;
+
+                    // Call DALL-E with or without the mask
                     generatedImageUrl = await ((DalleGenerationService)_generationService)
-                        .GenerateImageEditAsync(pngMs, generationPrompt, request.Prompt);
+                        .GenerateImageEditAsync(pngMs, maskStream, generationPrompt, request.Prompt);
+
+                    // Log whether a mask was used
+                    if (maskStream != null)
+                    {
+                        _logService.Log(request.Id, "Information", "Generated image with mask to preserve structural elements");
+                    }
                 }
                 finally
-                {
-                    // Make sure we dispose the memory stream
-                    pngMs.Dispose();
-                }
-
-                if (string.IsNullOrEmpty(generatedImageUrl))
-                {
-                    _logger.LogError("Generation service returned empty URL");
-                    _logService.Log(request.Id, "Error", "Generation service returned empty URL");
-                    throw new InvalidOperationException("Generation service returned empty URL");
-                }
-
-                // Verify the URL format
-                _logger.LogInformation("Received generated image URL: {GeneratedImageUrl}", generatedImageUrl);
-                _logService.Log(request.Id, "Information", $"Image generated successfully. URL: {generatedImageUrl}");
-
-                // Check if the URL is relative and log it
-                if (generatedImageUrl.StartsWith("/"))
-                {
-                    _logger.LogInformation("Generated URL is relative. This is expected for local storage.");
-
-                    // Try to check if the file exists
-                    var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", generatedImageUrl.TrimStart('/'));
-                    bool fileExists = File.Exists(filePath);
-                    _logger.LogInformation("File exists at path {FilePath}: {Exists}", filePath, fileExists);
-                    _logService.Log(request.Id, "Information", $"Generated image file exists: {fileExists}. Path: {filePath}");
-                }
-
-                request.GeneratedImageUrl = generatedImageUrl;
-                _logger.LogInformation("Generated image for request {RequestId}: {GeneratedImageUrl}", request.Id, generatedImageUrl);
-            }
-            catch (Exception ex)
             {
-                _logger.LogError(ex, "Error generating image: {Message}", ex.Message);
-                _logService.Log(request.Id, "Error", $"Image generation failed: {ex.Message}");
-                throw;
+                // Make sure we dispose the memory stream
+                pngMs.Dispose();
             }
 
-            // Update status to completed
-            request.Status = "Completed";
-            request.CompletedAt = DateTime.UtcNow;
-            await _imageRequestRepository.UpdateAsync(request);
+            if (string.IsNullOrEmpty(generatedImageUrl))
+            {
+                _logger.LogError("Generation service returned empty URL");
+                _logService.Log(request.Id, "Error", "Generation service returned empty URL");
+                throw new InvalidOperationException("Generation service returned empty URL");
+            }
 
-            _logger.LogInformation("Completed image request: {RequestId}", request.Id);
+            // Verify the URL format
+            _logger.LogInformation("Received generated image URL: {GeneratedImageUrl}", generatedImageUrl);
+            _logService.Log(request.Id, "Information", $"Image generated successfully. URL: {generatedImageUrl}");
 
-            // Optionally, start product matching in the background
-            _ = Task.Run(async () => await MatchProductsAsync(request.Id, generatedImageUrl));
+            // Check if the URL is relative and log it
+            if (generatedImageUrl.StartsWith("/"))
+            {
+                _logger.LogInformation("Generated URL is relative. This is expected for local storage.");
+
+                // Try to check if the file exists
+                var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", generatedImageUrl.TrimStart('/'));
+                bool fileExists = File.Exists(filePath);
+                _logger.LogInformation("File exists at path {FilePath}: {Exists}", filePath, fileExists);
+                _logService.Log(request.Id, "Information", $"Generated image file exists: {fileExists}. Path: {filePath}");
+            }
+
+            request.GeneratedImageUrl = generatedImageUrl;
+            _logger.LogInformation("Generated image for request {RequestId}: {GeneratedImageUrl}", request.Id, generatedImageUrl);
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating image: {Message}", ex.Message);
+            _logService.Log(request.Id, "Error", $"Image generation failed: {ex.Message}");
+            throw;
+        }
+
+        // Update status to completed
+        request.Status = "Completed";
+        request.CompletedAt = DateTime.UtcNow;
+        await _imageRequestRepository.UpdateAsync(request);
+
+        _logger.LogInformation("Completed image request: {RequestId}", request.Id);
+
+        // Optionally, start product matching in the background
+        _ = Task.Run(async () => await MatchProductsAsync(request.Id, generatedImageUrl));
+    }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing image request: {RequestId}", request.Id);
@@ -270,8 +314,8 @@ public class ImageGenerationOrchestrator
             request.CompletedAt = DateTime.UtcNow;
             await _imageRequestRepository.UpdateAsync(request);
 
-            // Log error to database
-            _logService.Log(request.Id, "Error", ex.Message);
+    // Log error to database
+    _logService.Log(request.Id, "Error", ex.Message);
 
             // Note: In a production system, you might want to refund credits on failure
         }
@@ -281,23 +325,23 @@ public class ImageGenerationOrchestrator
     /// Matches products to a generated image (background task)
     /// </summary>
     private async Task MatchProductsAsync(string requestId, string imageUrl)
+{
+    try
     {
-        try
-        {
-            _logger.LogInformation("Starting product matching for request: {RequestId}", requestId);
+        _logger.LogInformation("Starting product matching for request: {RequestId}", requestId);
 
-            var products = await _productMatcherService.DetectAndMatchProductsAsync(imageUrl);
+        var products = await _productMatcherService.DetectAndMatchProductsAsync(imageUrl);
 
-            _logger.LogInformation("Found {ProductCount} product matches for request: {RequestId}",
-                products.Count, requestId);
+        _logger.LogInformation("Found {ProductCount} product matches for request: {RequestId}",
+            products.Count, requestId);
 
-            // TODO: Store product matches in database
-            // This will be implemented in Week 4
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error matching products for request: {RequestId}", requestId);
-            // Product matching failure shouldn't affect the main generation
-        }
+        // TODO: Store product matches in database
+        // This will be implemented in Week 4
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error matching products for request: {RequestId}", requestId);
+        // Product matching failure shouldn't affect the main generation
+    }
+}
 }

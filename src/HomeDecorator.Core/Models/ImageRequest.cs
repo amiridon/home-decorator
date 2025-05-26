@@ -16,6 +16,7 @@ public class ImageRequest
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAt { get; set; }
     public string? ErrorMessage { get; set; }
+    public bool UseMask { get; set; } = false; // Whether to generate and use a mask for editing
 }
 
 /// <summary>
@@ -26,6 +27,7 @@ public class CreateImageRequestDto
     public string OriginalImageUrl { get; set; } = string.Empty;
     public string Prompt { get; set; } = string.Empty; // This will now be used for Decor Style
     public string? CustomPrompt { get; set; } // Optional: for additional user text if needed beyond style selection
+    public bool UseMask { get; set; } = false; // Whether to generate and use a mask for editing
 }
 
 /// <summary>
@@ -39,6 +41,7 @@ public class ImageRequestResponseDto
     public string OriginalImageUrl { get; set; } = string.Empty;
     public string Prompt { get; set; } = string.Empty;
     public int CreditsCharged { get; set; }
+    public bool UseMask { get; set; } = false;
     public DateTime CreatedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public string? ErrorMessage { get; set; }

@@ -1,0 +1,513 @@
+using System;
+using System.IO;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+
+namespace HomeDecorator.Api.Services;
+
+/// <summary>
+/// Service for generating masks to control which parts of an image can be edited.
+/// Uses a segmentation approach where transparent areas are editable and opaque areas are preserved.
+/// </summary>
+public class MaskGenerationService
+{
+    private readonly ILogger<MaskGenerationService> _logger;
+    private readonly HttpClient _httpClient;
+    private readonly IConfiguration _configuration;
+    private readonly IMemoryCache _cache;
+
+    // Categories of objects that should be considered "furniture" or "decorative elements" (editable)
+    private static readonly HashSet<string> EditableCategories = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "sofa", "couch", "chair", "table", "coffee table", "dining table", "desk", "bed", "lamp",
+        "cabinet", "wardrobe", "dresser", "shelf", "bookshelf", "rug", "carpet", "curtain", "pillow",
+        "cushion", "artwork", "painting", "picture", "mirror", "vase", "plant", "clock", "tv",
+        "television", "appliance", "decor", "decoration"
+    };
+
+    // Categories that should be considered "structural elements" (preserved)
+    private static readonly HashSet<string> StructuralCategories = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "wall", "ceiling", "floor", "beam", "column", "window", "door", "doorway", "staircase",
+        "stairs", "banister", "railing", "fireplace", "chimney", "radiator"
+    };    public MaskGenerationService(
+        ILogger<MaskGenerationService> logger,
+        IConfiguration configuration,
+        IMemoryCache memoryCache)
+    {
+        _logger = logger;
+        _configuration = configuration;
+        _httpClient = new HttpClient();
+        _cache = memoryCache;
+        
+        // Set timeout for API calls
+        _httpClient.Timeout = TimeSpan.FromSeconds(30);
+    }
+
+    /// <summary>
+    /// Generates a mask for an image, where transparent areas (alpha=0) can be edited
+    /// and opaque white areas (alpha=255) should be preserved.
+    /// </summary>
+    /// <param name="imageStream">The image stream to generate a mask for</param>
+    /// <param name="configOverrides">Optional dictionary of configuration overrides</param>
+    /// <returns>A stream containing the generated mask as a PNG</returns>
+    public async Task<Stream> GenerateMaskAsync(Stream imageStream, Dictionary<string, string>? configOverrides = null)
+    {
+        if (imageStream == null)
+        {
+            throw new ArgumentNullException(nameof(imageStream), "Image stream cannot be null");
+        }
+
+        _logger.LogInformation("Generating mask for image");
+
+        // Reset stream position for reading
+        if (imageStream.CanSeek)
+        {
+            imageStream.Position = 0;
+        }
+        
+        // Generate a cache key based on image content hash and configuration overrides
+        string cacheKey = GenerateCacheKey(imageStream, configOverrides);
+        // Try to get mask from cache
+        if (_cache.TryGetValue(cacheKey, out byte[]? cachedMaskData) && cachedMaskData != null)
+        {
+            _logger.LogInformation("Retrieved mask from cache");
+            return new MemoryStream(cachedMaskData);
+        }
+          try
+        {
+            // Apply configuration overrides if provided
+            IConfiguration effectiveConfig = _configuration;
+            
+            if (configOverrides != null && configOverrides.Count > 0)
+            {
+                // Create a new configuration source with the overrides
+                var configBuilder = new ConfigurationBuilder();
+                configBuilder.AddConfiguration(_configuration);
+                configBuilder.AddInMemoryCollection(configOverrides);
+                effectiveConfig = configBuilder.Build();
+                
+                _logger.LogInformation("Applied {Count} configuration overrides", configOverrides.Count);
+            }
+            
+            // Check if SAM API is configured
+            var samApiEndpoint = effectiveConfig["SAM:ApiEndpoint"];
+            bool useSamApi = !string.IsNullOrEmpty(samApiEndpoint) && 
+                             effectiveConfig.GetValue<bool>("SAM:Enabled", false);
+            
+            Stream maskStream;
+            if (useSamApi)
+            {
+                _logger.LogInformation("Using SAM API for mask generation");
+                maskStream = await GenerateSamMaskAsync(imageStream, effectiveConfig);
+            }
+            else
+            {
+                _logger.LogInformation("SAM API not configured, using demo mask generation");
+                maskStream = await GenerateDemoMaskAsync(imageStream);
+            }
+            
+            // Cache the generated mask
+            if (maskStream is MemoryStream ms)
+            {
+                _cache.Set(cacheKey, ms.ToArray(), TimeSpan.FromMinutes(30));
+            }
+            else
+            {
+                // If it's not a memory stream, copy it to one for caching
+                var cachingMs = new MemoryStream();
+                maskStream.Position = 0;
+                await maskStream.CopyToAsync(cachingMs);
+                _cache.Set(cacheKey, cachingMs.ToArray(), TimeSpan.FromMinutes(30));
+                
+                // Reset the position for the caller
+                maskStream.Position = 0;
+            }
+              return maskStream;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating mask: {Message}", ex.Message);
+            
+            // Fall back to demo mask if there's an error
+            _logger.LogWarning("Falling back to demo mask generation due to error");
+            imageStream.Position = 0;
+            return await GenerateDemoMaskAsync(imageStream);
+        }
+    }
+
+    /// <summary>
+    /// Creates a cache key based on the image content and configuration overrides
+    /// </summary>
+    private string GenerateCacheKey(Stream imageStream, Dictionary<string, string>? configOverrides = null)
+    {
+        // Save the current position
+        long originalPosition = imageStream.Position;
+        
+        try
+        {
+            // Reset position for reading
+            imageStream.Position = 0;
+            
+            // Compute a hash of the image data
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hash = sha.ComputeHash(imageStream);
+            string hashStr = BitConverter.ToString(hash).Replace("-", "");
+            
+            // If there are config overrides, include them in the cache key
+            if (configOverrides != null && configOverrides.Count > 0)
+            {
+                // Sort the keys for consistency
+                var sortedKeys = new List<string>(configOverrides.Keys);
+                sortedKeys.Sort();
+                
+                // Add each key/value pair to the hash
+                var configStr = new StringBuilder();
+                foreach (var key in sortedKeys)
+                {
+                    configStr.Append($"{key}={configOverrides[key]};");
+                }
+                
+                // Hash the config string
+                var configHash = sha.ComputeHash(Encoding.UTF8.GetBytes(configStr.ToString()));
+                string configHashStr = BitConverter.ToString(configHash).Replace("-", "");
+                
+                return $"mask_{hashStr}_{configHashStr}";
+            }
+            
+            return $"mask_{hashStr}";
+        }
+        finally
+        {
+            // Restore original position
+            imageStream.Position = originalPosition;
+        }
+    }
+
+    /// <summary>
+    /// Creates a demo mask for demonstration purposes.
+    /// In a production app, this would be replaced with a real segmentation model.
+    /// </summary>
+    private async Task<Stream> GenerateDemoMaskAsync(Stream imageStream)
+    {
+        // We'll simulate a SAM-like segmentation model by:
+        // 1. Loading the original image
+        // 2. Creating a mask where the center 60% of the image is transparent (to be modified)
+        // 3. And the outer 40% (walls, ceiling typically) is opaque white (to be preserved)
+        
+        try
+        {
+            // Create a memory stream to hold the mask
+            var maskStream = new MemoryStream();
+
+            // For demonstration, we'll use SkiaSharp to create a simple mask
+            // with a clear center region (editable) and white border (preserved)
+            using (var skBitmap = SkiaSharp.SKBitmap.Decode(imageStream))
+            {
+                if (skBitmap == null)
+                {
+                    throw new InvalidOperationException("Failed to decode input image for mask generation");
+                }
+
+                int width = skBitmap.Width;
+                int height = skBitmap.Height;
+                
+                // Create a new bitmap with the same dimensions but RGBA format
+                using var maskBitmap = new SkiaSharp.SKBitmap(width, height, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul);
+                
+                // Get usable canvas for the bitmap
+                using var canvas = new SkiaSharp.SKCanvas(maskBitmap);
+                
+                // Fill the entire bitmap with white (preserved areas)
+                canvas.Clear(SkiaSharp.SKColors.White);
+                
+                // Calculate the center area that should be transparent (editable)
+                int centerX = width / 2;
+                int centerY = height / 2;
+                int centerWidth = (int)(width * 0.6f); // 60% of width is editable
+                int centerHeight = (int)(height * 0.6f); // 60% of height is editable
+                
+                // Create transparent rectangle in the center
+                using var paint = new SkiaSharp.SKPaint
+                {
+                    Color = new SkiaSharp.SKColor(255, 255, 255, 0), // Transparent
+                    BlendMode = SkiaSharp.SKBlendMode.Clear
+                };
+                
+                // Draw the transparent center area
+                canvas.DrawRect(
+                    centerX - (centerWidth / 2),
+                    centerY - (centerHeight / 2),
+                    centerWidth,
+                    centerHeight,
+                    paint
+                );
+                
+                // Encode as PNG and save to the stream
+                using var image = SkiaSharp.SKImage.FromBitmap(maskBitmap);
+                using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                await Task.Run(() => data.SaveTo(maskStream));
+            }
+            
+            // Reset the position for reading
+            maskStream.Position = 0;
+            return maskStream;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating demo mask: {Message}", ex.Message);
+            throw new InvalidOperationException($"Error generating demo mask: {ex.Message}", ex);
+        }
+    }
+      /// <summary>
+    /// Generates a mask using the Segment Anything Model (SAM) via API integration.
+    /// This method calls a hosted SAM API endpoint to generate accurate segmentation masks.
+    /// </summary>
+    private async Task<Stream> GenerateSamMaskAsync(Stream imageStream, IConfiguration configuration)
+    {
+        // Reset stream position
+        imageStream.Position = 0;
+        
+        try
+        {
+            // Convert image stream to base64
+            byte[] imageBytes;
+            using (var memoryStream = new MemoryStream())
+            {
+                await imageStream.CopyToAsync(memoryStream);
+                imageBytes = memoryStream.ToArray();
+            }
+            var base64Image = Convert.ToBase64String(imageBytes);
+              // Get API configuration
+            var apiEndpoint = configuration["SAM:ApiEndpoint"];
+            var apiKey = configuration["SAM:ApiKey"];
+            
+            if (string.IsNullOrEmpty(apiEndpoint))
+            {
+                throw new InvalidOperationException("SAM API endpoint not configured");
+            }
+            
+            // Create the request payload with categories to identify
+            var requestBody = new
+            {
+                image = base64Image,
+                prompt = "Segment furniture and room structure",
+                classes = new[] 
+                { 
+                    "sofa", "chair", "table", "lamp", "cabinet", "rug", 
+                    "wall", "ceiling", "floor", "window", "door" 
+                }
+            };
+            
+            // Prepare the HTTP request
+            var request = new HttpRequestMessage(HttpMethod.Post, apiEndpoint);
+            
+            // Add API key if provided
+            if (!string.IsNullOrEmpty(apiKey))
+            {
+                request.Headers.Add("Authorization", $"Bearer {apiKey}");
+            }
+            
+            var content = new StringContent(
+                JsonSerializer.Serialize(requestBody),
+                Encoding.UTF8,
+                "application/json");
+                
+            request.Content = content;
+            
+            // Send the request
+            _logger.LogInformation("Sending request to SAM API endpoint: {Endpoint}", apiEndpoint);
+            var response = await _httpClient.SendAsync(request);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("SAM API error: {StatusCode}. Response: {ErrorContent}", 
+                    response.StatusCode, errorContent);
+                throw new InvalidOperationException($"Failed to call SAM API: {response.StatusCode}");
+            }
+            
+            // Process the response
+            var responseContent = await response.Content.ReadAsStringAsync();
+            _logger.LogInformation("Received SAM API response with length: {Length}", responseContent.Length);
+            
+            // Parse the response 
+            return await ProcessSamResponseAsync(responseContent, imageStream);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error using SAM API: {Message}", ex.Message);
+            throw new InvalidOperationException($"Error using SAM API: {ex.Message}", ex);
+        }
+    }
+    
+    /// <summary>
+    /// Process the SAM API response and generate a mask
+    /// </summary>
+    private async Task<Stream> ProcessSamResponseAsync(string apiResponse, Stream originalImageStream)
+    {
+        try
+        {
+            // Parse the API response
+            var responseJson = JsonDocument.Parse(apiResponse).RootElement;
+            
+            // Expected format will depend on the specific API being used
+            // This implementation assumes the API returns segment data with class labels
+            
+            // Create a memory stream for the resulting mask
+            var resultMask = new MemoryStream();
+            
+            // Reset original image position
+            originalImageStream.Position = 0;
+            
+            // Load the original image to get dimensions
+            using var originalImage = SkiaSharp.SKBitmap.Decode(originalImageStream);
+            if (originalImage == null)
+            {
+                throw new InvalidOperationException("Failed to decode original image");
+            }
+            
+            int width = originalImage.Width;
+            int height = originalImage.Height;
+            
+            // Create a new bitmap for the mask
+            using var maskBitmap = new SkiaSharp.SKBitmap(width, height, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul);
+            
+            // Start with a white canvas (all preserved)
+            using var canvas = new SkiaSharp.SKCanvas(maskBitmap);
+            canvas.Clear(SkiaSharp.SKColors.White);
+            
+            // Create a paint for transparent areas (to be edited)
+            using var transparentPaint = new SkiaSharp.SKPaint
+            {
+                Color = new SkiaSharp.SKColor(255, 255, 255, 0), // Transparent
+                BlendMode = SkiaSharp.SKBlendMode.Clear
+            };
+            
+            // Process each segment from the API response
+            // This exact code will depend on the API response format
+            if (responseJson.TryGetProperty("segments", out var segments))
+            {
+                foreach (var segment in segments.EnumerateArray())
+                {
+                    // Get the segment class
+                    string segmentClass = segment.GetProperty("class").GetString() ?? "";
+                    
+                    // Determine if this segment should be editable
+                    bool isEditable = IsEditableSegment(segmentClass);
+                    
+                    if (isEditable)
+                    {
+                        // Get the segment mask or points
+                        // This will depend on the API response format
+                        if (segment.TryGetProperty("mask", out var maskProperty))
+                        {
+                            // If the API provides a base64 mask
+                            string base64Mask = maskProperty.GetString() ?? "";
+                            if (!string.IsNullOrEmpty(base64Mask))
+                            {
+                                // Convert base64 to byte array
+                                byte[] maskBytes = Convert.FromBase64String(base64Mask);
+                                
+                                // Apply the mask to make this segment transparent (editable)
+                                using var segmentMask = SkiaSharp.SKBitmap.Decode(maskBytes);
+                                if (segmentMask != null)
+                                {
+                                    // Draw the segment with the transparent paint
+                                    canvas.DrawBitmap(segmentMask, 0, 0, transparentPaint);
+                                }
+                            }
+                        }
+                        else if (segment.TryGetProperty("points", out var pointsArray))
+                        {
+                            // If the API provides polygon points for the segment
+                            var points = new List<SkiaSharp.SKPoint>();
+                            
+                            foreach (var point in pointsArray.EnumerateArray())
+                            {
+                                float x = point.GetProperty("x").GetSingle();
+                                float y = point.GetProperty("y").GetSingle();
+                                points.Add(new SkiaSharp.SKPoint(x, y));
+                            }
+                            
+                            // Create a path from the points
+                            using var path = new SkiaSharp.SKPath();
+                            if (points.Count > 0)
+                            {
+                                path.MoveTo(points[0]);
+                                for (int i = 1; i < points.Count; i++)
+                                {
+                                    path.LineTo(points[i]);
+                                }
+                                path.Close();
+                                
+                                // Draw the path with transparent paint to make it editable
+                                canvas.DrawPath(path, transparentPaint);
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // If the API doesn't provide segments in the expected format,
+                // fall back to the demo mask
+                _logger.LogWarning("SAM API response doesn't contain expected 'segments' data. Using fallback mask.");
+                return await GenerateDemoMaskAsync(originalImageStream);
+            }
+            
+            // Encode the final mask as PNG
+            using var finalImage = SkiaSharp.SKImage.FromBitmap(maskBitmap);
+            using var finalData = finalImage.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+            await Task.Run(() => finalData.SaveTo(resultMask));
+            
+            // Reset the position for reading
+            resultMask.Position = 0;
+            return resultMask;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing SAM API response: {Message}", ex.Message);
+            
+            // Fall back to demo mask
+            _logger.LogWarning("Falling back to demo mask generation");
+            originalImageStream.Position = 0;
+            return await GenerateDemoMaskAsync(originalImageStream);
+        }
+    }
+    
+    /// <summary>
+    /// Analyzes a segmentation result and determines which segments should be editable
+    /// and which should be preserved.
+    /// </summary>
+    private bool IsEditableSegment(string segmentClass)
+    {
+        // Default to editable (transparent in mask) if we're not sure
+        if (string.IsNullOrEmpty(segmentClass))
+            return true;
+            
+        // Check if it's explicitly in either category
+        if (EditableCategories.Contains(segmentClass))
+            return true;
+            
+        if (StructuralCategories.Contains(segmentClass))
+            return false;
+            
+        // For anything else, use heuristics:
+        // - If it contains words like "wall", "ceiling", etc., preserve it
+        foreach (var term in StructuralCategories)
+        {
+            if (segmentClass.Contains(term, StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+        
+        // Default to editable for unrecognized objects
+        return true;
+    }
+}
