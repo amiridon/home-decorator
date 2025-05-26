@@ -1,5 +1,7 @@
 using HomeDecorator.Core.Models;
-using HomeDecorator.Core.Services; // ensure ILogService is included
+using HomeDecorator.Core.Services;
+using SkiaSharp; // For cross-platform image processing
+using System.IO; // Ensure this is included
 
 namespace HomeDecorator.Api.Services;
 
@@ -110,8 +112,110 @@ public class ImageGenerationOrchestrator
 
             string generatedImageUrl;
             try
-            {
-                generatedImageUrl = await _generationService.GenerateImageAsync(request.OriginalImageUrl, generationPrompt, request.Prompt);
+            {                // Download the original image as a stream (PNG)
+                _logger.LogInformation("Downloading original image from URL: {OriginalImageUrl}", request.OriginalImageUrl);
+                using var httpClient = new HttpClient();
+
+                // Add timeout to avoid hanging if the image server is slow
+                httpClient.Timeout = TimeSpan.FromSeconds(30);
+
+                using var imageResponse = await httpClient.GetAsync(request.OriginalImageUrl);
+
+                // Log response details
+                _logger.LogInformation("Original image download response: Status: {Status}, Content-Type: {ContentType}, Content-Length: {ContentLength}",
+                    imageResponse.StatusCode,
+                    imageResponse.Content.Headers.ContentType?.MediaType ?? "unknown",
+                    imageResponse.Content.Headers.ContentLength?.ToString() ?? "unknown");
+
+                if (!imageResponse.IsSuccessStatusCode)
+                {
+                    var errorContent = await imageResponse.Content.ReadAsStringAsync();
+                    _logger.LogError("Failed to download original image for edit: {StatusCode}, Error: {Error}",
+                        imageResponse.StatusCode, errorContent);
+                    _logService.Log(request.Id, "Error", $"Failed to download original image: {imageResponse.StatusCode}");
+                    throw new InvalidOperationException($"Failed to download original image for edit: {imageResponse.StatusCode}");
+                }
+
+                // Validate content type - should be an image
+                var contentType = imageResponse.Content.Headers.ContentType?.MediaType;
+                if (contentType == null || !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogError("Downloaded content is not an image. Content-Type: {ContentType}", contentType ?? "null");
+                    _logService.Log(request.Id, "Error", $"Downloaded content is not an image. Content-Type: {contentType ?? "null"}");
+                    throw new InvalidOperationException($"Downloaded content is not an image. Content-Type: {contentType ?? "null"}");
+                }
+
+                await using var imageStream = await imageResponse.Content.ReadAsStreamAsync();
+
+                // Verify stream has content
+                if (imageResponse.Content.Headers.ContentLength == 0 ||
+                    (imageStream.CanSeek && imageStream.Length == 0))
+                {
+                    _logger.LogError("Downloaded image is empty");
+                    _logService.Log(request.Id, "Error", "Downloaded image is empty");
+                    throw new InvalidOperationException("Downloaded image is empty");
+                }
+
+                _logger.LogInformation("Successfully downloaded original image, size: {Size} bytes",
+                    imageResponse.Content.Headers.ContentLength ?? -1);                // Convert image to PNG if necessary
+                MemoryStream pngMs;
+                if (contentType != null && !contentType.Equals("image/png", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation("Converting {ContentType} image to PNG format", contentType);
+
+                    // Create a memory stream for the PNG output
+                    pngMs = new MemoryStream();
+
+                    try
+                    {
+                        // Load the image data using SkiaSharp
+                        using (var skBitmap = SKBitmap.Decode(imageStream))
+                        {
+                            if (skBitmap != null)
+                            {
+                                // Create an image and encode as PNG
+                                using var skImage = SKImage.FromBitmap(skBitmap);
+                                using var skData = skImage.Encode(SKEncodedImageFormat.Png, 100);
+
+                                // Write the PNG data to the memory stream
+                                skData.SaveTo(pngMs);
+                            }
+                            else
+                            {
+                                _logger.LogError("Failed to decode image with SkiaSharp");
+                                throw new InvalidOperationException("Failed to decode image for PNG conversion");
+                            }
+                        }
+
+                        // Rewind the stream for reading
+                        pngMs.Position = 0;
+                        _logger.LogInformation("Successfully converted image to PNG format, size: {Size} bytes", pngMs.Length);
+                    }
+                    catch (Exception ex)
+                    {
+                        pngMs.Dispose();
+                        _logger.LogError(ex, "Error converting image to PNG: {Message}", ex.Message);
+                        throw new InvalidOperationException($"Error converting image to PNG: {ex.Message}", ex);
+                    }
+                }
+                else
+                {
+                    // Already PNG, just copy the stream to ensure we can read it from the beginning
+                    pngMs = new MemoryStream();
+                    await imageStream.CopyToAsync(pngMs);
+                    pngMs.Position = 0;
+                    _logger.LogInformation("Image is already PNG format, copied to memory stream, size: {Size} bytes", pngMs.Length);
+                }                // Call the new image-to-image edit method with the PNG stream
+                try
+                {
+                    generatedImageUrl = await ((DalleGenerationService)_generationService)
+                        .GenerateImageEditAsync(pngMs, generationPrompt, request.Prompt);
+                }
+                finally
+                {
+                    // Make sure we dispose the memory stream
+                    pngMs.Dispose();
+                }
 
                 if (string.IsNullOrEmpty(generatedImageUrl))
                 {
