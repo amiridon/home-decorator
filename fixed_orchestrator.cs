@@ -45,7 +45,7 @@ public class ImageGenerationOrchestrator
     /// </summary>
     public async Task<ImageRequest> CreateAndProcessRequestAsync(string userId, CreateImageRequestDto requestDto)
     {
-        _logger.LogInformation("Starting image generation request for user: {UserId}", userId);
+        _logger.LogInformation("Starting image generation request for user: {UserId}", userId);        
         // Create the request record
         var imageRequest = new ImageRequest
         {
@@ -111,7 +111,7 @@ public class ImageGenerationOrchestrator
             string generationPrompt = !string.IsNullOrEmpty(request.CustomPrompt)
                 ? request.CustomPrompt
                 : $"Update the decor style to {request.Prompt}. Maintain the room's structural integrity, including walls, windows, ceiling, and floor. Focus on changing decor elements like furniture, wall art, and lighting."; // Fallback if CustomPrompt is missing            
-
+                
             // Generate the image using the determined prompt and the decor style (request.Prompt)
             _logger.LogInformation("Calling generation service with originalImageUrl: {OriginalImageUrl}", request.OriginalImageUrl);
             _logService.Log(request.Id, "Information", $"Starting image generation with prompt: {generationPrompt}");
@@ -165,7 +165,7 @@ public class ImageGenerationOrchestrator
 
                 _logger.LogInformation("Successfully downloaded original image, size: {Size} bytes",
                     imageResponse.Content.Headers.ContentLength ?? -1);
-
+                    
                 // Convert image to PNG if necessary
                 MemoryStream pngMs;
                 if (contentType != null && !contentType.Equals("image/png", StringComparison.OrdinalIgnoreCase))
@@ -215,7 +215,7 @@ public class ImageGenerationOrchestrator
                     pngMs.Position = 0;
                     _logger.LogInformation("Image is already PNG format, copied to memory stream, size: {Size} bytes", pngMs.Length);
                 }
-
+                
                 // Call the new image-to-image edit method with the PNG stream
                 try
                 {

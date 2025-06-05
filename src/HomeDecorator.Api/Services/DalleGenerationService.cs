@@ -130,21 +130,26 @@ public class DalleGenerationService : IGenerationService
 
         // Log that we're about to start the generation process
         string maskInfo = maskStream != null ? " with mask" : " without mask";
-        _logger.LogInformation("Starting GPT-Image-1 edit generation with {Style} style{MaskInfo}", decorStyle, maskInfo);
+        _logger.LogInformation("Starting GPT-Image-1 edit generation with {Style} style{MaskInfo}", decorStyle, maskInfo); var fullPrompt = BuildEnhancedPrompt(prompt, "", decorStyle);
 
-        var fullPrompt = BuildEnhancedPrompt(prompt, "", decorStyle);
+        // Reset stream position to beginning if possible
+        if (imageStream.CanSeek)
+        {
+            imageStream.Position = 0;
+            _logger.LogInformation("Reset image stream position to beginning");
+        }
 
         using var content = new MultipartFormDataContent();
         content.Add(new StringContent("gpt-image-1"), "model");
         content.Add(new StringContent(fullPrompt), "prompt");
         content.Add(new StringContent("1024x1024"), "size");
         content.Add(new StringContent("medium"), "quality");
-        content.Add(new StringContent("1"), "n");
-
-        // Add the image as a file
+        content.Add(new StringContent("1"), "n");// Add the image as a file - ensure it's properly formatted as PNG
         var imageContent = new StreamContent(imageStream);
         imageContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
         content.Add(imageContent, "image", "input.png");
+
+        _logger.LogInformation("Added image to request with Content-Type: image/png");
 
         // Add the mask if provided
         if (maskStream != null)
@@ -154,12 +159,21 @@ public class DalleGenerationService : IGenerationService
             maskContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
             content.Add(maskContent, "mask", "mask.png");
         }
-
         var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/images/edits");
         request.Headers.Add("Authorization", $"Bearer {apiKey}");
         request.Content = content;
+
+        // Add detailed logging of the request
+        _logger.LogInformation("Sending request to GPT-Image-1 API with model: gpt-image-1");
+        _logger.LogInformation("Image stream position: {Position}, Can read: {CanRead}, Length: {Length}",
+            imageStream.Position, imageStream.CanRead, imageStream.CanSeek ? imageStream.Length.ToString() : "unknown");
+
         using var response = await _httpClient.SendAsync(request);
         var json = await response.Content.ReadAsStringAsync();
+
+        // Log detailed response info
+        _logger.LogInformation("API Response Status: {Status} {ReasonPhrase}",
+            (int)response.StatusCode, response.ReasonPhrase);
 
         // Log the entire JSON response structure regardless of status code
         _logger.LogInformation("OpenAI API Response: {Json}", json);
@@ -419,13 +433,10 @@ public class DalleGenerationService : IGenerationService
         _logger.LogInformation("Building enhanced prompt with style: {Style} and user prompt: {UserPrompt}",
             decorStyle, userPrompt);
 
-        var enhancedPrompt = $"Transform this interior/exterior home space into a PHOTOREALISTIC, professionally designed version in a '{decorStyle}' style. " +
+        var enhancedPrompt = $"Show me the exact same image but remove the people and animals and change the color of the furniture. " +
+               $"Transform this interior/exterior home space into a PHOTOREALISTIC, professionally designed version in a '{decorStyle}' style. " +
                $"The user's specific request is: '{userPrompt}'. " +
                $"CRITICALLY IMPORTANT: " +
-               $"1. Create a HIGHLY PHOTOREALISTIC result, not cartoon-like or illustrated. " +
-               $"2. Maintain the EXACT camera angle and perspective of the original photo. " +
-               $"3. Preserve the precise positions of all structural elements: walls, windows, doorways, ceiling, floor, columns, beams, and all architectural features. " +
-               $"4. Keep the exact same room dimensions and layout. " +
                $"Focus style changes ONLY on elements like wall decor, lighting fixtures, furniture pieces, textiles, wall colors, and decorative accessories. " +
                $"The final image should look like a professional architectural/interior design photograph with realistic lighting, natural shadows, proper perspective, and high-end finishes for the '{decorStyle}' style. " +
                $"Use the provided input image as a precise reference for the existing space and architectural elements, updating only the decor and aesthetic elements as requested.";

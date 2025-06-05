@@ -1,4 +1,3 @@
-// filepath: c:\Users\ImamuHunter\dev\home-decorator\src\HomeDecorator.Api\Services\ImageGenerationOrchestrator.cs
 using HomeDecorator.Core.Models;
 using HomeDecorator.Core.Services;
 using SkiaSharp; // For cross-platform image processing
@@ -45,8 +44,7 @@ public class ImageGenerationOrchestrator
     /// </summary>
     public async Task<ImageRequest> CreateAndProcessRequestAsync(string userId, CreateImageRequestDto requestDto)
     {
-        _logger.LogInformation("Starting image generation request for user: {UserId}", userId);
-        // Create the request record
+        _logger.LogInformation("Starting image generation request for user: {UserId}", userId);        // Create the request record
         var imageRequest = new ImageRequest
         {
             UserId = userId,
@@ -87,8 +85,7 @@ public class ImageGenerationOrchestrator
 
     /// <summary>
     /// Processes an image generation request (background task)
-    /// </summary>
-    private async Task ProcessRequestAsync(ImageRequest request)
+    /// </summary>    private async Task ProcessRequestAsync(ImageRequest request)
     {
         try
         {
@@ -110,9 +107,7 @@ public class ImageGenerationOrchestrator
             // Determine the prompt to use for image generation
             string generationPrompt = !string.IsNullOrEmpty(request.CustomPrompt)
                 ? request.CustomPrompt
-                : $"Update the decor style to {request.Prompt}. Maintain the room's structural integrity, including walls, windows, ceiling, and floor. Focus on changing decor elements like furniture, wall art, and lighting."; // Fallback if CustomPrompt is missing            
-
-            // Generate the image using the determined prompt and the decor style (request.Prompt)
+                : $"Update the decor style to {request.Prompt}. Maintain the room's structural integrity, including walls, windows, ceiling, and floor. Focus on changing decor elements like furniture, wall art, and lighting."; // Fallback if CustomPrompt is missing            // Generate the image using the determined prompt and the decor style (request.Prompt)
             _logger.LogInformation("Calling generation service with originalImageUrl: {OriginalImageUrl}", request.OriginalImageUrl);
             _logService.Log(request.Id, "Information", $"Starting image generation with prompt: {generationPrompt}");
 
@@ -165,7 +160,7 @@ public class ImageGenerationOrchestrator
 
                 _logger.LogInformation("Successfully downloaded original image, size: {Size} bytes",
                     imageResponse.Content.Headers.ContentLength ?? -1);
-
+                    
                 // Convert image to PNG if necessary
                 MemoryStream pngMs;
                 if (contentType != null && !contentType.Equals("image/png", StringComparison.OrdinalIgnoreCase))
@@ -215,7 +210,7 @@ public class ImageGenerationOrchestrator
                     pngMs.Position = 0;
                     _logger.LogInformation("Image is already PNG format, copied to memory stream, size: {Size} bytes", pngMs.Length);
                 }
-
+                
                 // Call the new image-to-image edit method with the PNG stream
                 try
                 {
@@ -257,9 +252,7 @@ public class ImageGenerationOrchestrator
 
                     // Call DALL-E with or without the mask
                     generatedImageUrl = await ((DalleGenerationService)_generationService)
-                        .GenerateImageEditAsync(pngMs, maskStream, generationPrompt, request.Prompt);
-
-                    // Log whether a mask was used
+                        .GenerateImageEditAsync(pngMs, maskStream, generationPrompt, request.Prompt);                    // Log whether a mask was used
                     if (maskStream != null)
                     {
                         _logService.Log(request.Id, "Information", "Generated image with mask to preserve structural elements");
@@ -309,25 +302,19 @@ public class ImageGenerationOrchestrator
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error generating image: {Message}", ex.Message);
-                _logService.Log(request.Id, "Error", $"Image generation failed: {ex.Message}");
-                throw;
+                _logger.LogError(ex, "Error processing image request: {RequestId}", request.Id);
+
+                // Update request with error
+                request.Status = "Failed";
+                request.ErrorMessage = ex.Message;
+                request.CompletedAt = DateTime.UtcNow;
+                await _imageRequestRepository.UpdateAsync(request);
+
+                // Log error to database
+                _logService.Log(request.Id, "Error", ex.Message);
+
+                // Note: In a production system, you might want to refund credits on failure
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error processing image request: {RequestId}", request.Id);
-
-            // Update request with error
-            request.Status = "Failed";
-            request.ErrorMessage = ex.Message;
-            request.CompletedAt = DateTime.UtcNow;
-            await _imageRequestRepository.UpdateAsync(request);
-
-            // Log error to database
-            _logService.Log(request.Id, "Error", ex.Message);
-
-            // Note: In a production system, you might want to refund credits on failure
         }
     }
 
@@ -335,23 +322,23 @@ public class ImageGenerationOrchestrator
     /// Matches products to a generated image (background task)
     /// </summary>
     private async Task MatchProductsAsync(string requestId, string imageUrl)
+{
+    try
     {
-        try
-        {
-            _logger.LogInformation("Starting product matching for request: {RequestId}", requestId);
+        _logger.LogInformation("Starting product matching for request: {RequestId}", requestId);
 
-            var products = await _productMatcherService.DetectAndMatchProductsAsync(imageUrl);
+        var products = await _productMatcherService.DetectAndMatchProductsAsync(imageUrl);
 
-            _logger.LogInformation("Found {ProductCount} product matches for request: {RequestId}",
-                products.Count, requestId);
+        _logger.LogInformation("Found {ProductCount} product matches for request: {RequestId}",
+            products.Count, requestId);
 
-            // TODO: Store product matches in database
-            // This will be implemented in Week 4
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error matching products for request: {RequestId}", requestId);
-            // Product matching failure shouldn't affect the main generation
-        }
+        // TODO: Store product matches in database
+        // This will be implemented in Week 4
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error matching products for request: {RequestId}", requestId);
+        // Product matching failure shouldn't affect the main generation
+    }
+}
 }
