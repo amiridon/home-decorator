@@ -8,7 +8,7 @@ public partial class NewDesignPage : ContentPage
     private readonly IFeatureFlagService _featureFlagService;
     private readonly IGenerationService _generationService;
     private readonly ApiService _apiService;
-    private FileResult? _selectedPhoto;
+    private List<FileResult> _selectedPhotos = new List<FileResult>();
     private readonly Dictionary<string, string> _decorStyles;
 
     public NewDesignPage(IFeatureFlagService featureFlagService, IGenerationService generationService, ApiService apiService)
@@ -45,9 +45,8 @@ public partial class NewDesignPage : ContentPage
             var photo = await MediaPicker.CapturePhotoAsync();
             if (photo != null)
             {
-                _selectedPhoto = photo;
-                var stream = await photo.OpenReadAsync();
-                SelectedImage.Source = ImageSource.FromStream(() => stream);
+                _selectedPhotos.Add(photo);
+                await UpdateImageDisplay();
             }
         }
         catch (Exception ex)
@@ -59,17 +58,61 @@ public partial class NewDesignPage : ContentPage
     {
         try
         {
-            var photo = await MediaPicker.PickPhotoAsync();
-            if (photo != null)
+            // Use FilePicker for multiple photo selection
+            var fileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
             {
-                _selectedPhoto = photo;
-                var stream = await photo.OpenReadAsync();
-                SelectedImage.Source = ImageSource.FromStream(() => stream);
+                { DevicePlatform.iOS, new[] { "public.image" } },
+                { DevicePlatform.Android, new[] { "image/*" } },
+                { DevicePlatform.WinUI, new[] { ".jpg", ".jpeg", ".png", ".bmp", ".webp" } },
+                { DevicePlatform.MacCatalyst, new[] { "public.image" } }
+            });
+
+            var options = new PickOptions
+            {
+                PickerTitle = "Select Photos",
+                FileTypes = fileTypes
+            };
+
+            var photos = await FilePicker.PickMultipleAsync(options);
+            if (photos != null && photos.Any())
+            {
+                // Clear previous selections and add new ones
+                _selectedPhotos.Clear();
+                _selectedPhotos.AddRange(photos);
+                await UpdateImageDisplay();
             }
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Error", $"Failed to pick photo: {ex.Message}", "OK");
+            await DisplayAlert("Error", $"Failed to pick photos: {ex.Message}", "OK");
+        }
+    }
+    private async Task UpdateImageDisplay()
+    {
+        if (_selectedPhotos.Any())
+        {
+            // Display the first selected photo
+            var firstPhoto = _selectedPhotos.First();
+            var stream = await firstPhoto.OpenReadAsync();
+            SelectedImage.Source = ImageSource.FromStream(() => stream);
+
+            // Update the count label
+            PhotoCountLabel.Text = _selectedPhotos.Count == 1
+                ? $"1 photo selected: {firstPhoto.FileName}"
+                : $"{_selectedPhotos.Count} photos selected (showing: {firstPhoto.FileName})";
+            PhotoCountLabel.TextColor = Colors.Green;
+
+            // Show clear button
+            ClearButton.IsVisible = true;
+        }
+        else
+        {
+            PhotoCountLabel.Text = "No photos selected";
+            PhotoCountLabel.TextColor = Colors.Gray;
+
+            // Hide clear button and reset image
+            ClearButton.IsVisible = false;
+            SelectedImage.Source = "dotnet_bot.png";
         }
     }
     private async void OnGenerateDesignClicked(object sender, EventArgs e)
@@ -79,8 +122,7 @@ public partial class NewDesignPage : ContentPage
             await DisplayAlert("Missing Information", "Please select a design style.", "OK");
             return;
         }
-
-        if (_selectedPhoto == null)
+        if (!_selectedPhotos.Any())
         {
             await DisplayAlert("Missing Information", "Please select or take a photo first.", "OK");
             return;
@@ -91,15 +133,15 @@ public partial class NewDesignPage : ContentPage
         GeneratedImage.IsVisible = false;
 
         try
-        {
-            // Upload the selected image first
+        {            // Upload the selected image first (use the first selected photo)
+            var selectedPhoto = _selectedPhotos.First();
             string imageUrl;
             try
             {
-                using (var stream = await _selectedPhoto.OpenReadAsync())
+                using (var stream = await selectedPhoto.OpenReadAsync())
                 {
-                    Console.WriteLine($"Uploading image: {_selectedPhoto.FileName}, size: {stream.Length} bytes");
-                    imageUrl = await _apiService.UploadImageAsync(stream, _selectedPhoto.FileName);
+                    Console.WriteLine($"Uploading image: {selectedPhoto.FileName}, size: {stream.Length} bytes");
+                    imageUrl = await _apiService.UploadImageAsync(stream, selectedPhoto.FileName);
                     Console.WriteLine($"Successfully uploaded image, received URL: {imageUrl}");
                 }
             }
@@ -308,5 +350,11 @@ public partial class NewDesignPage : ContentPage
             Status = "Failed",
             ErrorMessage = "Timed out waiting for design generation to complete. Please check the history page later."
         };
+    }
+
+    private async void OnClearSelectionClicked(object sender, EventArgs e)
+    {
+        _selectedPhotos.Clear();
+        await UpdateImageDisplay();
     }
 }
