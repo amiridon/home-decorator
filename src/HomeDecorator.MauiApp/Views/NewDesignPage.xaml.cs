@@ -9,7 +9,6 @@ public partial class NewDesignPage : ContentPage
     private readonly IGenerationService _generationService;
     private readonly ApiService _apiService;
     private List<FileResult> _selectedPhotos = new List<FileResult>();
-    private readonly Dictionary<string, string> _decorStyles;
 
     public NewDesignPage(IFeatureFlagService featureFlagService, IGenerationService generationService, ApiService apiService)
     {
@@ -18,17 +17,8 @@ public partial class NewDesignPage : ContentPage
         _generationService = generationService;
         _apiService = apiService;
 
-        _decorStyles = new Dictionary<string, string>
-        {
-            { "Modern", "A detailed prompt for a modern look focusing on clean lines, neutral colors, and minimalist furniture." },
-            { "Contemporary", "A detailed prompt for a contemporary look featuring current trends, fluid shapes, and a mix of textures." },
-            { "Minimalist", "A detailed prompt for a minimalist look emphasizing simplicity, functionality, and a monochromatic color palette." },
-            { "Industrial", "A detailed prompt for an industrial look showcasing raw materials like brick and metal, open spaces, and vintage-inspired furniture." },
-            { "Bohemian", "A detailed prompt for a bohemian look characterized by a relaxed atmosphere, vibrant colors, and eclectic patterns." },
-            { "Farmhouse", "A detailed prompt for a farmhouse look that is cozy and rustic, with natural wood, comfortable furniture, and vintage accents." }
-        };
-
-        foreach (var style in _decorStyles.Keys)
+        var availableStyles = PromptGenerationService.GetAvailableStyles();
+        foreach (var style in availableStyles)
         {
             StylePicker.Items.Add(style);
         }
@@ -36,6 +26,16 @@ public partial class NewDesignPage : ContentPage
         if (StylePicker.Items.Count > 0)
         {
             StylePicker.SelectedIndex = 0;
+        }
+
+        var roomTypes = new List<string> { "Living Room", "Bedroom", "Bathroom", "Kitchen", "Dining Room", "Office", "Basement", "Backyard", "Garage", "Foyer" };
+        foreach (var roomType in roomTypes)
+        {
+            RoomTypePicker.Items.Add(roomType);
+        }
+        if (RoomTypePicker.Items.Count > 0)
+        {
+            RoomTypePicker.SelectedIndex = 0;
         }
     }
     private async void OnTakePhotoClicked(object sender, EventArgs e)
@@ -128,6 +128,12 @@ public partial class NewDesignPage : ContentPage
             return;
         }
 
+        if (RoomTypePicker.SelectedItem == null)
+        {
+            await DisplayAlert("Missing Information", "Please select a room type.", "OK");
+            return;
+        }
+
         IsBusy = true;
         LoadingIndicator.IsVisible = true;
         GeneratedImage.IsVisible = false;
@@ -151,12 +157,8 @@ public partial class NewDesignPage : ContentPage
                 throw new Exception($"Failed to upload image: {ex.Message}", ex);
             }            // Get the selected style and its corresponding detailed prompt
             var selectedStyleKey = StylePicker.SelectedItem?.ToString() ?? "Modern";
-            if (!_decorStyles.ContainsKey(selectedStyleKey))
-            {
-                selectedStyleKey = _decorStyles.Keys.FirstOrDefault() ?? "Modern";
-                Console.WriteLine($"Selected style not found in dictionary, using default: {selectedStyleKey}");
-            }
-            var detailedPromptForStyle = _decorStyles[selectedStyleKey];
+            var selectedRoomType = RoomTypePicker.SelectedItem?.ToString() ?? "Living Room";
+            var detailedPromptForStyle = PromptGenerationService.GetRandomPrompt(selectedStyleKey, selectedRoomType);
 
             // Create the image generation request
             // The 'selectedStyleKey' is sent as the 'decorStyle' (which was previously the 'prompt' field in CreateImageRequestDto)

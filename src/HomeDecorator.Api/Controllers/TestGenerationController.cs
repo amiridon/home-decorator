@@ -26,14 +26,16 @@ public class TestGenerationController : ControllerBase
     }
 
     [HttpGet("generate")]
-    public async Task<IActionResult> TestGenerate([FromQuery] string imageUrl, [FromQuery] string prompt = "Modern style")
+    public async Task<IActionResult> TestGenerate([FromQuery] string imageUrl, [FromQuery] string prompt = "Modern", [FromQuery] string roomType = "Living Room")
     {
         try
         {
             _logger.LogInformation("Testing image generation with URL: {Url} and prompt: {Prompt}", imageUrl, prompt);
 
+            var generatedPrompt = PromptGenerationService.GetRandomPrompt(prompt, roomType);
+
             // Generate the image
-            var generatedUrl = await _generationService.GenerateImageAsync(imageUrl, prompt);
+            var generatedUrl = await _generationService.GenerateImageAsync(imageUrl, generatedPrompt);
 
             // Check if the URL is relative and build full URL for client
             if (generatedUrl.StartsWith("/"))

@@ -58,6 +58,17 @@
                                                 <!-- Items will be added from code-behind -->
                                         </Picker>
 
+                                        <Label Text="Select Room Type"
+                                               FontSize="16"
+                                               FontAttributes="Bold"/>
+
+                                        <Label Text="Choose the type of room you are redesigning"/>
+
+                                        <Picker x:Name="RoomTypePicker"
+                                                Title="Select a room type">
+                                                <!-- Items will be added from code-behind -->
+                                        </Picker>
+
                                         <Button Text="Generate Design"
                                                 BackgroundColor="#34C759"
                                                 TextColor="White"
