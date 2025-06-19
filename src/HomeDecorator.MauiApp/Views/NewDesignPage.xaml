@@ -47,6 +47,17 @@
                                 StrokeShape="{RoundRectangle CornerRadius=10}"
                                 Padding="20">
                                 <VerticalStackLayout Spacing="15">
+                                        <Label Text="Select Room Type"
+                                               FontSize="20"
+                                               FontAttributes="Bold"/>
+
+                                        <Label Text="Choose the type of room you are redesigning"/>
+
+                                        <Picker x:Name="RoomTypePicker"
+                                                Title="Select a room type">
+                                                <!-- Items will be added from code-behind -->
+                                        </Picker>
+
                                         <Label Text="Select Design Style"
                                                FontSize="20"
                                                FontAttributes="Bold"/>
@@ -55,17 +66,6 @@
 
                                         <Picker x:Name="StylePicker"
                                                 Title="Select a style">
-                                                <!-- Items will be added from code-behind -->
-                                        </Picker>
-
-                                        <Label Text="Select Room Type"
-                                               FontSize="16"
-                                               FontAttributes="Bold"/>
-
-                                        <Label Text="Choose the type of room you are redesigning"/>
-
-                                        <Picker x:Name="RoomTypePicker"
-                                                Title="Select a room type">
                                                 <!-- Items will be added from code-behind -->
                                         </Picker>
 
